@@ -12,10 +12,16 @@
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
+    <ClCompile Include="Core\ConPtyProcess.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="Core\ConPtyProcess.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Wide310x150Logo.scale-200.png">
@@ -46,6 +52,9 @@
     </Filter>
     <Filter Include="Assets\Fonts">
       <UniqueIdentifier>{150eb945-d2d5-4b76-8490-e3f066b8e831}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{15f729ce-404c-4127-a950-17ac3e627204}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

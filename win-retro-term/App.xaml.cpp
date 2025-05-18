@@ -5,9 +5,6 @@
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
-
 namespace winrt::win_retro_term::implementation
 {
     /// <summary>
@@ -36,7 +33,7 @@ namespace winrt::win_retro_term::implementation
     /// </summary>
     /// <param name="e">Details about the launch request and process.</param>
     void App::OnLaunched([[maybe_unused]] LaunchActivatedEventArgs const& e)
-    {
+    {        
         window = make<MainWindow>();
         window.Activate();
     }
