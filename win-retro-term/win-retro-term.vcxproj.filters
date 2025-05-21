@@ -15,12 +15,18 @@
     <ClCompile Include="Core\ConPtyProcess.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="Renderer\D3D11Renderer.cpp">
+      <Filter>Renderer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Core\ConPtyProcess.h">
       <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer\D3D11Renderer.h">
+      <Filter>Renderer</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -56,6 +62,12 @@
     <Filter Include="Core">
       <UniqueIdentifier>{15f729ce-404c-4127-a950-17ac3e627204}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Renderer">
+      <UniqueIdentifier>{e36814bf-834b-46ae-8521-306b7fb8cf43}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{2bbf495b-3431-4a54-8c05-b3631270b3b1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
@@ -68,5 +80,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="win-retro-term.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natstepfilter" />
   </ItemGroup>
 </Project>

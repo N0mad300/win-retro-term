@@ -1,4 +1,7 @@
 #pragma once
+
+#define NOMINMAX
+
 #include <windows.h>
 #include <unknwn.h>
 #include <restrictederrorinfo.h>
@@ -22,4 +25,5 @@
 #include <winrt/Microsoft.UI.Xaml.Navigation.h>
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 #include <winrt/Microsoft.UI.Dispatching.h>
+#include <winrt/Windows.Graphics.Display.h>
 #include <wil/cppwinrt_helpers.h>
