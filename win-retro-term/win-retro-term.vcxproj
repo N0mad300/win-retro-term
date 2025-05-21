@@ -118,10 +118,17 @@
     </ClInclude>
     <ClInclude Include="Renderer\D3D11Renderer.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="TerminalControl.xaml.h">
+      <DependentUpon>TerminalControl.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
+    <Page Include="TerminalControl.xaml">
+      <SubType>Designer</SubType>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\ConPtyProcess.cpp" />
@@ -136,11 +143,19 @@
     </ClCompile>
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
     <ClCompile Include="Renderer\D3D11Renderer.cpp" />
+    <ClCompile Include="TerminalControl.xaml.cpp">
+      <DependentUpon>TerminalControl.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Midl Include="MainWindow.idl">
       <SubType>Code</SubType>
       <DependentUpon>MainWindow.xaml</DependentUpon>
+    </Midl>
+    <Midl Include="TerminalControl.idl">
+      <DependentUpon>TerminalControl.xaml</DependentUpon>
+      <SubType>Code</SubType>
     </Midl>
   </ItemGroup>
   <ItemGroup>
