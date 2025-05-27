@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "D3D11Renderer.h"
-#include <windows.ui.xaml.media.dxinterop.h>
+
+#include <microsoft.ui.xaml.media.dxinterop.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Graphics.Display.h>
