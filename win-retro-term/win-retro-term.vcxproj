@@ -181,6 +181,24 @@
   <ItemGroup>
     <ResourceCompile Include="win-retro-term.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <Font Include="Assets\Fonts\1971-ibm-3278\3270-Regular.ttf" />
+    <Font Include="Assets\Fonts\1977-apple2\PrintChar21.ttf" />
+    <Font Include="Assets\Fonts\1977-apple2\PRNumber3.ttf" />
+    <Font Include="Assets\Fonts\1977-commodore-pet\PetMe.ttf" />
+    <Font Include="Assets\Fonts\1979-atari-400-800\AtariClassic-Regular.ttf" />
+    <Font Include="Assets\Fonts\1981-ibm-pc\PxPlus_IBM_BIOS.ttf" />
+    <Font Include="Assets\Fonts\1982-commodore64\C64_Pro_Mono-STYLE.ttf" />
+    <Font Include="Assets\Fonts\1985-ibm-pc-vga\PxPlus_IBM_VGA8.ttf" />
+    <Font Include="Assets\Fonts\modern-fixedsys-excelsior\FSEX301-L2.ttf" />
+    <Font Include="Assets\Fonts\modern-hermit\Hermit-bold.otf" />
+    <Font Include="Assets\Fonts\modern-hermit\Hermit-light.otf" />
+    <Font Include="Assets\Fonts\modern-hermit\Hermit-medium.otf" />
+    <Font Include="Assets\Fonts\modern-inconsolata\Inconsolata.otf" />
+    <Font Include="Assets\Fonts\modern-pro-font-win-tweaked\ProFontWindows.ttf" />
+    <Font Include="Assets\Fonts\modern-proggy-tiny\ProggyTiny.ttf" />
+    <Font Include="Assets\Fonts\modern-terminus\TerminusTTF-4.46.0.ttf" />
+  </ItemGroup>
   <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
     Explorer "Package and Publish" context menu entry to be enabled for this project even if

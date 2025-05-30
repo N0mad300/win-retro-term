@@ -6,6 +6,12 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Graphics.Display.h>
 
+#include <appmodel.h>
+#include <shlobj.h>
+#include <pathcch.h>
+
+#pragma comment(lib, "Pathcch.lib")
+
 inline void ThrowIfFailed(HRESULT hr) {
     if (FAILED(hr)) {
         winrt::throw_hresult(hr);
@@ -23,7 +29,6 @@ D3D11Renderer::~D3D11Renderer() {
 }
 
 void D3D11Renderer::CreateDeviceIndependentResources() {
-
     // Create D2D Factory
     D2D1_FACTORY_OPTIONS d2dFactoryOptions = {};
 #if defined(_DEBUG)
@@ -42,6 +47,80 @@ void D3D11Renderer::CreateDeviceIndependentResources() {
         __uuidof(IDWriteFactory3),
         reinterpret_cast<IUnknown**>(m_dwriteFactory.GetAddressOf())
     ));
+
+    // Get the path to the application's package installation folder.
+    // For unpackaged apps, you might need to get the executable's directory.
+    wchar_t packagePath[MAX_PATH] = {};
+    if (GetCurrentPackageFullName(nullptr, packagePath) == ERROR_INSUFFICIENT_BUFFER) {
+        UINT32 length = 0;
+        GetCurrentPackageFullName(&length, nullptr); // Get required length
+        std::vector<wchar_t> tempPath(length);
+        if (GetCurrentPackageFullName(&length, tempPath.data()) == ERROR_SUCCESS) {
+            wcscpy_s(packagePath, MAX_PATH, tempPath.data());
+        }
+        else {
+            // Fallback for unpackaged apps or if GetCurrentPackageFullName fails:
+            // Get executable path
+            GetModuleFileName(nullptr, packagePath, MAX_PATH);
+            PathCchRemoveFileSpec(packagePath, MAX_PATH); // Remove the exe name
+        }
+    }
+    else if (wcslen(packagePath) == 0) { // Could happen if not packaged and GetCurrentPackageFullName fails without ERROR_INSUFFICIENT_BUFFER
+        // Fallback for unpackaged apps: Get executable path
+        GetModuleFileName(nullptr, packagePath, MAX_PATH);
+        PathCchRemoveFileSpec(packagePath, MAX_PATH); // Remove the exe name
+    }
+
+    Microsoft::WRL::ComPtr<IDWriteFontSetBuilder> baseFontSetBuilder;
+    ThrowIfFailed(m_dwriteFactory->CreateFontSetBuilder(baseFontSetBuilder.GetAddressOf()));
+
+    Microsoft::WRL::ComPtr<IDWriteFontSetBuilder1> fontSetBuilder;
+    ThrowIfFailed(baseFontSetBuilder.As(&fontSetBuilder));
+
+    // Define the fonts you want to load, with their subdirectory and filename
+    struct FontToLoad {
+        const wchar_t* subDirectory;
+        const wchar_t* fileName;
+    };
+
+    std::vector<FontToLoad> fonts = {
+        { L"1971-ibm-3278", L"3270-Regular.ttf" },
+        { L"1977-apple2", L"PrintChar21.ttf" }
+    };
+
+    bool atLeastOneFontLoaded = false;
+    for (const auto& fontInfo : fonts) {
+        wchar_t fontSubFolderPath[MAX_PATH] = {};
+        wchar_t specificFontPath[MAX_PATH] = {};
+
+        ThrowIfFailed(PathCchCombine(fontSubFolderPath, MAX_PATH, packagePath, L"Assets\\Fonts"));
+        ThrowIfFailed(PathCchCombine(fontSubFolderPath, MAX_PATH, fontSubFolderPath, fontInfo.subDirectory));
+        ThrowIfFailed(PathCchCombine(specificFontPath, MAX_PATH, fontSubFolderPath, fontInfo.fileName));
+
+        Microsoft::WRL::ComPtr<IDWriteFontFile> fontFile;
+        HRESULT hrFontFile = m_dwriteFactory->CreateFontFileReference(specificFontPath, nullptr, &fontFile);
+
+        if (SUCCEEDED(hrFontFile)) {
+            ThrowIfFailed(fontSetBuilder->AddFontFile(fontFile.Get()));
+            OutputDebugString((L"Successfully referenced font file: " + std::wstring(specificFontPath) + L"\n").c_str());
+            atLeastOneFontLoaded = true;
+        }
+        else {
+            OutputDebugString((L"Failed to create font file reference for: " + std::wstring(specificFontPath) + L" Error: 0x" + std::to_wstring(hrFontFile) + L"\n").c_str());
+        }
+    }
+
+    if (atLeastOneFontLoaded) {
+        Microsoft::WRL::ComPtr<IDWriteFontSet> fontSet;
+        ThrowIfFailed(fontSetBuilder->CreateFontSet(&fontSet));
+        ThrowIfFailed(m_dwriteFactory->CreateFontCollectionFromFontSet(fontSet.Get(), &m_retroFontCollection));
+        if (m_retroFontCollection) {
+            OutputDebugString(L"Custom font collection created from loaded fonts.\n");
+        }
+    }
+    else {
+        OutputDebugString(L"No custom fonts were successfully loaded into the font set.\n");
+    }
 }
 
 void D3D11Renderer::Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel) {
@@ -103,17 +182,29 @@ void D3D11Renderer::CreateDeviceResources() {
     // Create a solid color brush for text
     ThrowIfFailed(m_d2dContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::LightSkyBlue), &m_textBrush));
 
-    // Create a DirectWrite text format
-    ThrowIfFailed(m_dwriteFactory->CreateTextFormat(
-        L"Consolas",                // Font family name
-        nullptr,                    // Font collection (nullptr for system collection)
-        DWRITE_FONT_WEIGHT_NORMAL,
-        DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL,
-        15.0f,                      // Font size in DIPs (Device Independent Pixels)
-        L"en-US",                   // Locale name
-        &m_textFormat
-    ));
+    const wchar_t* defaultFontFamilyName = L"IBM 3270";
+
+    BOOL fontExists = FALSE;
+    UINT32 fontIndex = 0;
+
+    if (m_retroFontCollection) {
+        // Check if the desired default font family exists in our custom collection
+        m_retroFontCollection->FindFamilyName(defaultFontFamilyName, &fontIndex, &fontExists);
+    }
+
+    if (m_retroFontCollection && fontExists) {
+        OutputDebugString((L"Using custom font: " + std::wstring(defaultFontFamilyName) + L" for TextFormat.\n").c_str());
+        ThrowIfFailed(m_dwriteFactory->CreateTextFormat(
+            defaultFontFamilyName,
+            m_retroFontCollection.Get(),
+            DWRITE_FONT_WEIGHT_NORMAL,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL,
+            15.0f,
+            L"en-US",
+            &m_textFormat
+        ));
+    }
 
     ThrowIfFailed(m_textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
     ThrowIfFailed(m_textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));

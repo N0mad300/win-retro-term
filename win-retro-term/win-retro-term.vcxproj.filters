@@ -69,6 +69,45 @@
     <Filter Include="UI">
       <UniqueIdentifier>{2bbf495b-3431-4a54-8c05-b3631270b3b1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Assets\Fonts\ibm-3278">
+      <UniqueIdentifier>{e197f6b7-b53a-4599-9fc0-927d16bd230a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\apple-2">
+      <UniqueIdentifier>{de3dc57e-a7ef-4f24-83fd-1c292a2ed94f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\commodore-pet">
+      <UniqueIdentifier>{6ff24c0e-eba0-4805-a7f8-5ef9efa787ed}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\atari-400-800">
+      <UniqueIdentifier>{63030af2-f6f0-4d89-b9f1-c94cc69d33a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\ibm-pc">
+      <UniqueIdentifier>{9a911c7f-77be-4291-9df2-b704945e0756}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\commodore-64">
+      <UniqueIdentifier>{a853ae34-65b2-4b1e-8cfc-1c6b13d6e3ea}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\ibm-pc-vga">
+      <UniqueIdentifier>{d79c7e5c-2a5d-4a43-878d-9093c10966ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\fixedsys-excelsior">
+      <UniqueIdentifier>{d2ecdac2-1955-4dde-a368-580bbb075495}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\hermit">
+      <UniqueIdentifier>{86d4063f-f631-44a8-ac66-575b69a15d04}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\inconsolata">
+      <UniqueIdentifier>{a48b89df-9cdc-4917-842c-4639b160fbe6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\pro-font-win-tweaked">
+      <UniqueIdentifier>{2755aa8c-2ecf-4a8f-85ed-dbf81dae2d1c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\proggy-tiny">
+      <UniqueIdentifier>{c60a2d16-f2e9-4f70-adb6-e03a9ab0099d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Fonts\terminus">
+      <UniqueIdentifier>{ebd0ae82-8d9a-4483-834b-51f7e477b9bb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
@@ -85,5 +124,55 @@
   <ItemGroup>
     <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
     <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natstepfilter" />
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="Assets\Fonts\1971-ibm-3278\3270-Regular.ttf">
+      <Filter>Assets\Fonts\ibm-3278</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\1977-apple2\PrintChar21.ttf">
+      <Filter>Assets\Fonts\apple-2</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\1977-apple2\PRNumber3.ttf">
+      <Filter>Assets\Fonts\apple-2</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\1977-commodore-pet\PetMe.ttf">
+      <Filter>Assets\Fonts\commodore-pet</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\1979-atari-400-800\AtariClassic-Regular.ttf">
+      <Filter>Assets\Fonts\atari-400-800</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\1981-ibm-pc\PxPlus_IBM_BIOS.ttf">
+      <Filter>Assets\Fonts\ibm-pc</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\1982-commodore64\C64_Pro_Mono-STYLE.ttf">
+      <Filter>Assets\Fonts\commodore-64</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\1985-ibm-pc-vga\PxPlus_IBM_VGA8.ttf">
+      <Filter>Assets\Fonts\ibm-pc-vga</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\modern-fixedsys-excelsior\FSEX301-L2.ttf">
+      <Filter>Assets\Fonts\fixedsys-excelsior</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\modern-hermit\Hermit-bold.otf">
+      <Filter>Assets\Fonts\hermit</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\modern-hermit\Hermit-light.otf">
+      <Filter>Assets\Fonts\hermit</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\modern-hermit\Hermit-medium.otf">
+      <Filter>Assets\Fonts\hermit</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\modern-inconsolata\Inconsolata.otf">
+      <Filter>Assets\Fonts\inconsolata</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\modern-terminus\TerminusTTF-4.46.0.ttf">
+      <Filter>Assets\Fonts\terminus</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\modern-proggy-tiny\ProggyTiny.ttf">
+      <Filter>Assets\Fonts\proggy-tiny</Filter>
+    </Font>
+    <Font Include="Assets\Fonts\modern-pro-font-win-tweaked\ProFontWindows.ttf">
+      <Filter>Assets\Fonts\pro-font-win-tweaked</Filter>
+    </Font>
   </ItemGroup>
 </Project>

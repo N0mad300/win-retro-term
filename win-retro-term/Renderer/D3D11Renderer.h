@@ -46,6 +46,7 @@ private:
     // New: Direct2D & DirectWrite Objects
     Microsoft::WRL::ComPtr<ID2D1Factory3>         m_d2dFactory;
     Microsoft::WRL::ComPtr<IDWriteFactory3>       m_dwriteFactory;
+    Microsoft::WRL::ComPtr<IDWriteFontCollection1> m_retroFontCollection;
     Microsoft::WRL::ComPtr<ID2D1Device2>          m_d2dDevice;
     Microsoft::WRL::ComPtr<ID2D1DeviceContext2>   m_d2dContext;
     Microsoft::WRL::ComPtr<ID2D1Bitmap1>          m_d2dTargetBitmap;
