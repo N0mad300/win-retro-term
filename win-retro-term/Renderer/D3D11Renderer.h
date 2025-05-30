@@ -4,6 +4,9 @@
 #include <dxgi1_3.h>
 #include <wrl/client.h>
 
+#include <d2d1_3.h>
+#include <dwrite_3.h>
+
 namespace winrt::Microsoft::UI::Xaml::Controls {
     struct SwapChainPanel;
 }
@@ -39,6 +42,15 @@ private:
     Microsoft::WRL::ComPtr<ID3D11DeviceContext1>  m_d3dContext;
     Microsoft::WRL::ComPtr<IDXGISwapChain1>       m_swapChain;
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_renderTargetView;
+
+    // New: Direct2D & DirectWrite Objects
+    Microsoft::WRL::ComPtr<ID2D1Factory3>         m_d2dFactory;
+    Microsoft::WRL::ComPtr<IDWriteFactory3>       m_dwriteFactory;
+    Microsoft::WRL::ComPtr<ID2D1Device2>          m_d2dDevice;
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext2>   m_d2dContext;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1>          m_d2dTargetBitmap;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>  m_textBrush;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat>     m_textFormat;
 
     // Cached Panel and properties
     winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel m_swapChainPanel{ nullptr };

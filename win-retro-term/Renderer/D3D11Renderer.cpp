@@ -18,10 +18,30 @@ D3D11Renderer::D3D11Renderer() {
 
 D3D11Renderer::~D3D11Renderer() {
     ReleaseDeviceDependentResources();
+    m_dwriteFactory = nullptr;
+    m_d2dFactory = nullptr;
 }
 
 void D3D11Renderer::CreateDeviceIndependentResources() {
-    // Initialize D2D, DirectWrite factories here if needed
+
+    // Create D2D Factory
+    D2D1_FACTORY_OPTIONS d2dFactoryOptions = {};
+#if defined(_DEBUG)
+    d2dFactoryOptions.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
+#endif
+    ThrowIfFailed(D2D1CreateFactory(
+        D2D1_FACTORY_TYPE_SINGLE_THREADED,
+        __uuidof(ID2D1Factory3),
+        &d2dFactoryOptions,
+        &m_d2dFactory
+    ));
+
+    // Create DirectWrite Factory
+    ThrowIfFailed(DWriteCreateFactory(
+        DWRITE_FACTORY_TYPE_SHARED,
+        __uuidof(IDWriteFactory3),
+        reinterpret_cast<IUnknown**>(m_dwriteFactory.GetAddressOf())
+    ));
 }
 
 void D3D11Renderer::Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel) {
@@ -70,14 +90,44 @@ void D3D11Renderer::CreateDeviceResources() {
     ThrowIfFailed(device.As(&m_d3dDevice));
     ThrowIfFailed(context.As(&m_d3dContext));
 
+    // D2D/DWrite Device Resource Creation
+    Microsoft::WRL::ComPtr<IDXGIDevice3> dxgiDevice;
+    ThrowIfFailed(m_d3dDevice.As(&dxgiDevice));
+
+    // Create D2D Device
+    ThrowIfFailed(m_d2dFactory->CreateDevice(dxgiDevice.Get(), &m_d2dDevice));
+
+    // Create D2D Device Context
+    ThrowIfFailed(m_d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &m_d2dContext));
+
+    // Create a solid color brush for text
+    ThrowIfFailed(m_d2dContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::LightSkyBlue), &m_textBrush));
+
+    // Create a DirectWrite text format
+    ThrowIfFailed(m_dwriteFactory->CreateTextFormat(
+        L"Consolas",                // Font family name
+        nullptr,                    // Font collection (nullptr for system collection)
+        DWRITE_FONT_WEIGHT_NORMAL,
+        DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL,
+        15.0f,                      // Font size in DIPs (Device Independent Pixels)
+        L"en-US",                   // Locale name
+        &m_textFormat
+    ));
+
+    ThrowIfFailed(m_textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
+    ThrowIfFailed(m_textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
+
     m_deviceLost = false;
 }
 
 void D3D11Renderer::CreateWindowSizeDependentResources() {
     if (!m_swapChainPanel || !m_d3dDevice) return;
 
-    // Release existing RTV if any
-    m_renderTargetView = nullptr;
+    // Release D2D target bitmap first, as it depends on the DXGI surface
+    m_d2dContext->SetTarget(nullptr);
+    m_d2dTargetBitmap = nullptr;
+    m_renderTargetView = nullptr; // Release D3D RTV
 
     // Calculate the necessary swap chain dimensions.
     // The SwapChainPanel's dimensions are in logical DIPs.
@@ -156,6 +206,20 @@ void D3D11Renderer::CreateWindowSizeDependentResources() {
         &m_renderTargetView
     ));
 
+    // Create D2D target bitmap and set it on the D2D context
+    D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), // Use PREMULTIPLIED for good alpha blending
+        m_compositionScaleX * 96.0f, // DPI X (CompositionScale is scale factor relative to 96 DPI)
+        m_compositionScaleY * 96.0f  // DPI Y
+    );
+
+    Microsoft::WRL::ComPtr<IDXGISurface2> dxgiSurface;
+    ThrowIfFailed(backBuffer.As(&dxgiSurface)); // Get the DXGI surface from the D3D back buffer
+    ThrowIfFailed(m_d2dContext->CreateBitmapFromDxgiSurface(dxgiSurface.Get(), &bitmapProperties, &m_d2dTargetBitmap));
+
+    m_d2dContext->SetTarget(m_d2dTargetBitmap.Get()); // Set D2D context to draw to this bitmap
+
     // Set the viewport.
     D3D11_VIEWPORT viewport = { 0 };
     viewport.TopLeftX = 0.0f;
@@ -227,14 +291,49 @@ void D3D11Renderer::ValidateDevice() {
 
 void D3D11Renderer::Render() {
     if (!m_isInitialized || m_deviceLost) return;
-    if (!m_renderTargetView) return; // Not ready yet
+    if (!m_renderTargetView || !m_d2dContext || !m_d2dTargetBitmap) return;
 
-    // For now, just clear the screen to a color
-    const float cornflowerBlue[] = { 0.392f, 0.584f, 0.929f, 1.000f };
+    // Clear the D3D render target (background color)
+    const float darkTerminalBackground[] = { 0.02f, 0.02f, 0.08f, 1.0f }; // A very dark blue
+    m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), darkTerminalBackground);
 
-    m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), cornflowerBlue);
+    m_d2dContext->BeginDraw();
+    m_d2dContext->Clear(D2D1::ColorF(0, 0, 0, 0));
+    m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
 
-    // This is where we are going to draw our terminal text texture, apply shaders, etc.
+    std::wstring sampleText = L"Hello Terminal! - DirectWrite on D3D11\nLine 2: {}()<>$%^&*";
+    D2D1_RECT_F textLayoutRect = D2D1::RectF(
+        10.0f,  // Left (in DIPs)
+        10.0f,  // Top (in DIPs)
+        static_cast<float>(m_logicalSize.Width - 10.0f),  // Right (in DIPs)
+        static_cast<float>(m_logicalSize.Height - 10.0f) // Bottom (in DIPs)
+    );
+
+    if (m_textBrush && m_textFormat) {
+        m_d2dContext->DrawText(
+            sampleText.c_str(),
+            static_cast<UINT32>(sampleText.length()),
+            m_textFormat.Get(),
+            &textLayoutRect,
+            m_textBrush.Get(),
+            D2D1_DRAW_TEXT_OPTIONS_NONE
+        );
+    }
+
+    HRESULT hr = m_d2dContext->EndDraw();
+    if (hr == D2DERR_RECREATE_TARGET) {
+        // The D2D target (our D3D surface) was lost.
+        // This usually means the D3D device itself was lost.
+        // Mark device as lost and try to recreate on next frame/ValidateDevice.
+        OutputDebugStringA("D2DERR_RECREATE_TARGET in Render. Marking device lost.\n");
+        m_deviceLost = true;
+        // Release D2D-specific size resources so they are recreated
+        m_d2dContext->SetTarget(nullptr);
+        m_d2dTargetBitmap = nullptr;
+    }
+    else {
+        ThrowIfFailed(hr); // Throw for other D2D errors
+    }
 }
 
 void D3D11Renderer::Present() {
@@ -269,8 +368,17 @@ void D3D11Renderer::Resume() {
 void D3D11Renderer::ReleaseDeviceDependentResources() {
     m_renderTargetView = nullptr;
     m_swapChain = nullptr;
-    if (m_d3dContext) m_d3dContext->ClearState(); // Good practice
-    if (m_d3dContext) m_d3dContext->Flush();      // Ensure commands are processed
+
+    if (m_d2dContext) m_d2dContext->SetTarget(nullptr);
+    m_d2dTargetBitmap = nullptr;
+    m_textBrush = nullptr;
+    m_textFormat = nullptr;
+    m_d2dContext = nullptr;
+    m_d2dDevice = nullptr;
+
+    if (m_d3dContext) m_d3dContext->ClearState();
+    if (m_d3dContext) m_d3dContext->Flush();
+
     m_d3dContext = nullptr;
     m_d3dDevice = nullptr; // This should be last for device-dependent resources
     m_isInitialized = false; // Mark as not initialized until re-created
