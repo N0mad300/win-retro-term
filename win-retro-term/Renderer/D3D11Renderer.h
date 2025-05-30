@@ -18,10 +18,10 @@ public:
     void Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel);
     void SetLogicalSize(winrt::Windows::Foundation::Size logicalSize);
     void SetCompositionScale(float compositionScaleX, float compositionScaleY);
-    void ValidateDevice(); // For handling device lost scenarios
+    void ValidateDevice();
 
     void Render();
-    void Present(); // Separated Present from Render for more control if needed
+    void Present();
 
     void Suspend();
     void Resume();
@@ -45,7 +45,7 @@ private:
     winrt::Windows::Foundation::Size m_logicalSize{ 0, 0 };
     float m_compositionScaleX = 1.0f;
     float m_compositionScaleY = 1.0f;
-    D3D_FEATURE_LEVEL m_featureLevel = D3D_FEATURE_LEVEL_9_1; // Default, will be updated
+    D3D_FEATURE_LEVEL m_featureLevel = D3D_FEATURE_LEVEL_9_1;
 
     // Physical pixel size of the swap chain
     UINT m_renderTargetWidth = 0;

@@ -27,14 +27,14 @@ void D3D11Renderer::CreateDeviceIndependentResources() {
 void D3D11Renderer::Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel) {
     m_swapChainPanel = panel;
     CreateDeviceResources();
-    CreateWindowSizeDependentResources(); // Initial setup based on panel's current size (if any)
+    CreateWindowSizeDependentResources();
     m_isInitialized = true;
 }
 
 void D3D11Renderer::CreateDeviceResources() {
-    if (m_d3dDevice) return; // Already created
+    if (m_d3dDevice) return;
 
-    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT; // BGRA is good for XAML interop
+    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
 #if defined(_DEBUG)
     creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -225,15 +225,13 @@ void D3D11Renderer::ValidateDevice() {
     }
 }
 
-
 void D3D11Renderer::Render() {
     if (!m_isInitialized || m_deviceLost) return;
     if (!m_renderTargetView) return; // Not ready yet
 
     // For now, just clear the screen to a color
-    const float cornflowerBlue[] = { 0.392f, 0.584f, 0.929f, 1.000f }; // RGBA
-    // Or a dark terminal color:
-    // const float darkColor[] = { 0.05f, 0.05f, 0.15f, 1.0f };
+    const float cornflowerBlue[] = { 0.392f, 0.584f, 0.929f, 1.000f };
+
     m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), cornflowerBlue);
 
     // This is where we are going to draw our terminal text texture, apply shaders, etc.
