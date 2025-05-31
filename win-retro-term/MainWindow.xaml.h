@@ -1,13 +1,14 @@
 #pragma once
 
 #include "MainWindow.g.h"
+#include "Core/ConPtyProcess.h"
+#include <memory>
 
 namespace winrt::win_retro_term::implementation
 {
     struct MainWindow : MainWindowT<MainWindow>
     {
         MainWindow();
-        ~MainWindow();
     };
 }
 

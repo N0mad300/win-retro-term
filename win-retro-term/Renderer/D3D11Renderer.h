@@ -7,6 +7,8 @@
 #include <d2d1_3.h>
 #include <dwrite_3.h>
 
+#include "Core/TerminalBuffer.h"
+
 namespace winrt::Microsoft::UI::Xaml::Controls {
     struct SwapChainPanel;
 }
@@ -18,7 +20,7 @@ public:
     D3D11Renderer();
     ~D3D11Renderer();
 
-    void Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel);
+    void Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel, winrt::win_retro_term::Core::TerminalBuffer* buffer);
     void SetLogicalSize(winrt::Windows::Foundation::Size logicalSize);
     void SetCompositionScale(float compositionScaleX, float compositionScaleY);
     void ValidateDevice();
@@ -30,6 +32,9 @@ public:
     void Resume();
 
     bool IsInitialized() const { return m_isInitialized; }
+
+    float GetFontCharWidth() const;
+    float GetFontCharHeight() const;
 
 private:
     void CreateDeviceIndependentResources();
@@ -66,4 +71,12 @@ private:
 
     bool m_isInitialized = false;
     bool m_deviceLost = false;
+
+    // Font metrics and terminal buffer
+    winrt::win_retro_term::Core::TerminalBuffer* m_terminalBufferPtr = nullptr;
+
+    float m_avgCharWidth = 8.0f;
+    float m_lineHeight = 16.0f;
+
+    void UpdateFontMetrics();
 };

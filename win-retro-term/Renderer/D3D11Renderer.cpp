@@ -123,10 +123,12 @@ void D3D11Renderer::CreateDeviceIndependentResources() {
     }
 }
 
-void D3D11Renderer::Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel) {
+void D3D11Renderer::Initialize(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& panel, winrt::win_retro_term::Core::TerminalBuffer* buffer) {
     m_swapChainPanel = panel;
+    m_terminalBufferPtr = buffer;
     CreateDeviceResources();
     CreateWindowSizeDependentResources();
+    UpdateFontMetrics();
     m_isInitialized = true;
 }
 
@@ -208,6 +210,8 @@ void D3D11Renderer::CreateDeviceResources() {
 
     ThrowIfFailed(m_textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
     ThrowIfFailed(m_textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
+
+    UpdateFontMetrics();
 
     m_deviceLost = false;
 }
@@ -305,6 +309,8 @@ void D3D11Renderer::CreateWindowSizeDependentResources() {
         m_compositionScaleY * 96.0f  // DPI Y
     );
 
+    UpdateFontMetrics();
+
     Microsoft::WRL::ComPtr<IDXGISurface2> dxgiSurface;
     ThrowIfFailed(backBuffer.As(&dxgiSurface)); // Get the DXGI surface from the D3D back buffer
     ThrowIfFailed(m_d2dContext->CreateBitmapFromDxgiSurface(dxgiSurface.Get(), &bitmapProperties, &m_d2dTargetBitmap));
@@ -322,6 +328,34 @@ void D3D11Renderer::CreateWindowSizeDependentResources() {
     m_d3dContext->RSSetViewports(1, &viewport);
 }
 
+void D3D11Renderer::UpdateFontMetrics() {
+    if (!m_dwriteFactory || !m_textFormat) return;
+
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> tempLayout;
+    const wchar_t* testString = L"M";
+    ThrowIfFailed(m_dwriteFactory->CreateTextLayout(
+        testString,
+        (UINT32)wcslen(testString),
+        m_textFormat.Get(),
+        1000.0f,
+        1000.0f,
+        &tempLayout
+    ));
+
+    DWRITE_TEXT_METRICS textMetrics;
+    ThrowIfFailed(tempLayout->GetMetrics(&textMetrics));
+    m_avgCharWidth = textMetrics.width / wcslen(testString);
+    m_lineHeight = textMetrics.height;
+
+    OutputDebugStringA(("Font Metrics Updated: CharW=" + std::to_string(m_avgCharWidth) + " LineH=" + std::to_string(m_lineHeight) + "\n").c_str());
+}
+
+float D3D11Renderer::GetFontCharWidth() const {
+    return m_avgCharWidth > 0 ? m_avgCharWidth : 8.0f;
+}
+float D3D11Renderer::GetFontCharHeight() const {
+    return m_lineHeight > 0 ? m_lineHeight : 16.0f;
+}
 
 void D3D11Renderer::SetLogicalSize(winrt::Windows::Foundation::Size logicalSize) {
     if (m_logicalSize.Width != logicalSize.Width || m_logicalSize.Height != logicalSize.Height) {
@@ -381,7 +415,7 @@ void D3D11Renderer::ValidateDevice() {
 }
 
 void D3D11Renderer::Render() {
-    if (!m_isInitialized || m_deviceLost) return;
+    if (!m_isInitialized || m_deviceLost || !m_terminalBufferPtr) return;
     if (!m_renderTargetView || !m_d2dContext || !m_d2dTargetBitmap) return;
 
     // Clear the D3D render target (background color)
@@ -389,41 +423,84 @@ void D3D11Renderer::Render() {
     m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), darkTerminalBackground);
 
     m_d2dContext->BeginDraw();
-    m_d2dContext->Clear(D2D1::ColorF(0, 0, 0, 0));
     m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
 
-    std::wstring sampleText = L"Hello Terminal! - DirectWrite on D3D11\nLine 2: {}()<>$%^&*";
-    D2D1_RECT_F textLayoutRect = D2D1::RectF(
-        10.0f,  // Left (in DIPs)
-        10.0f,  // Top (in DIPs)
-        static_cast<float>(m_logicalSize.Width - 10.0f),  // Right (in DIPs)
-        static_cast<float>(m_logicalSize.Height - 10.0f) // Bottom (in DIPs)
-    );
-
     if (m_textBrush && m_textFormat) {
-        m_d2dContext->DrawText(
-            sampleText.c_str(),
-            static_cast<UINT32>(sampleText.length()),
-            m_textFormat.Get(),
-            &textLayoutRect,
-            m_textBrush.Get(),
-            D2D1_DRAW_TEXT_OPTIONS_NONE
-        );
+        const auto& screenData = m_terminalBufferPtr->GetScreenBuffer();
+        int rows = m_terminalBufferPtr->GetRows();
+        int cols = m_terminalBufferPtr->GetCols();
+
+        float yPos = 5.0f; // Starting Y offset (in DIPs)
+        // float charWidth = m_avgCharWidth; // Use cached font metrics
+        float lineHeight = m_lineHeight;
+
+        for (int r = 0; r < rows; ++r) {
+            std::wstring lineText;
+            lineText.reserve(cols);
+            if (r < screenData.size()) { // Ensure row exists
+                for (int c = 0; c < cols; ++c) {
+                    if (c < screenData[r].size()) { // Ensure col exists
+                        lineText += screenData[r][c].character;
+                    }
+                    else {
+                        lineText += L' '; // Pad if col doesn't exist (shouldn't happen with proper buffer init)
+                    }
+                }
+            }
+            else { // Pad if row doesn't exist (shouldn't happen)
+                lineText.assign(cols, L' ');
+            }
+
+
+            // Trim trailing spaces for potentially better rendering performance with some layouts
+            // size_t lastChar = lineText.find_last_not_of(L' ');
+            // if (std::wstring::npos != lastChar) {
+            //     lineText.erase(lastChar + 1);
+            // } else {
+            //     lineText.clear(); // Line is all spaces
+            // }
+
+
+            if (!lineText.empty()) { // Only draw if there's something to draw
+                D2D1_RECT_F textLayoutRect = D2D1::RectF(
+                    5.0f,  // Left X offset (in DIPs)
+                    yPos,
+                    static_cast<float>(m_logicalSize.Width - 5.0f),
+                    yPos + lineHeight
+                );
+
+                m_d2dContext->DrawTextW(
+                    lineText.c_str(),
+                    static_cast<UINT32>(lineText.length()),
+                    m_textFormat.Get(),
+                    &textLayoutRect,
+                    m_textBrush.Get(),
+                    D2D1_DRAW_TEXT_OPTIONS_NONE // Use NO_CLIP if you want to see overflows
+                                                 // D2D1_DRAW_TEXT_OPTIONS_CLIP
+                );
+            }
+            yPos += lineHeight; // Move to next line position
+        }
+
+        // TODO: Render cursor
+        int cursorR = m_terminalBufferPtr->GetCursorRow();
+        int cursorC = m_terminalBufferPtr->GetCursorCol();
+        float cursor_x_pos = 5.0f + cursorC * m_avgCharWidth;
+        float cursor_y_pos = 5.0f + cursorR * m_lineHeight;
+        // Draw a rectangle or block for the cursor
+        D2D1_RECT_F cursorRect = D2D1::RectF(cursor_x_pos, cursor_y_pos, cursor_x_pos + m_avgCharWidth, cursor_y_pos + m_lineHeight);
+        m_d2dContext->FillRectangle(&cursorRect, m_textBrush.Get()); // Example: solid cursor
     }
 
     HRESULT hr = m_d2dContext->EndDraw();
     if (hr == D2DERR_RECREATE_TARGET) {
-        // The D2D target (our D3D surface) was lost.
-        // This usually means the D3D device itself was lost.
-        // Mark device as lost and try to recreate on next frame/ValidateDevice.
         OutputDebugStringA("D2DERR_RECREATE_TARGET in Render. Marking device lost.\n");
         m_deviceLost = true;
-        // Release D2D-specific size resources so they are recreated
         m_d2dContext->SetTarget(nullptr);
         m_d2dTargetBitmap = nullptr;
     }
     else {
-        ThrowIfFailed(hr); // Throw for other D2D errors
+        ThrowIfFailed(hr);
     }
 }
 

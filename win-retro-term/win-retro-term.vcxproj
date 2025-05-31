@@ -108,7 +108,9 @@
     <Manifest Include="app.manifest" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Core\AnsiParser.h" />
     <ClInclude Include="Core\ConPtyProcess.h" />
+    <ClInclude Include="Core\TerminalBuffer.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="App.xaml.h">
       <DependentUpon>App.xaml</DependentUpon>
@@ -131,7 +133,9 @@
     </Page>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Core\AnsiParser.cpp" />
     <ClCompile Include="Core\ConPtyProcess.cpp" />
+    <ClCompile Include="Core\TerminalBuffer.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
