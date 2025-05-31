@@ -94,63 +94,61 @@ namespace winrt::win_retro_term::Core
     }
 
 
-    void TerminalBuffer::AddChar(wchar_t ch) {
-        if (m_cursorY >= m_rows) { // Should not happen if NewLine is managed correctly
+    void TerminalBuffer::PrintChar(wchar_t ch) {
+        if (m_cursorY >= m_rows) {
             m_cursorY = m_rows - 1;
             ScrollUp();
         }
         if (m_cursorX >= m_cols) {
             CarriageReturn();
-            NewLine(); // Wrap to next line
+            LineFeed();
         }
 
         if (m_cursorY < m_rows && m_cursorX < m_cols) {
             m_screenBuffer[m_cursorY][m_cursorX].character = ch;
             m_cursorX++;
-            if (m_cursorX >= m_cols) { // If character filled the last column
-                // Don't automatically wrap here; let next char or newline handle it.
-                // Many terminals have a "deferred wrap" or "auto wrap" mode.
-                // For now, we'll just let it sit at m_cols, and the next AddChar will wrap.
-            }
         }
     }
 
-    void TerminalBuffer::NewLine() {
+    void TerminalBuffer::ExecuteControlFunction(wchar_t control) 
+    {
+    }
+
+    void TerminalBuffer::LineFeed() { // LF, \n
         m_cursorY++;
-        // m_cursorX remains unchanged (standard VT100 behavior for LF without CR)
         if (m_cursorY >= m_rows) {
             ScrollUp();
-            m_cursorY = m_rows - 1; // Stay on the last line
+            m_cursorY = m_rows - 1;
         }
     }
 
-    void TerminalBuffer::CarriageReturn() {
+    void TerminalBuffer::CarriageReturn() { // CR, \r
         m_cursorX = 0;
     }
 
-    void TerminalBuffer::Backspace() {
+    void TerminalBuffer::Backspace() { // BS, \b
         if (m_cursorX > 0) {
             m_cursorX--;
-            // Optional: Erase character at new m_cursorX
-            // m_screenBuffer[m_cursorY][m_cursorX].character = L' ';
+            m_screenBuffer[m_cursorY][m_cursorX].character = L' ';
         }
-        // else if (m_cursorY > 0) { // More complex: wrap to previous line
-        //    m_cursorY--;
-        //    m_cursorX = m_cols -1;
-        //    m_screenBuffer[m_cursorY][m_cursorX].character = L' ';
-        // }
+        else if (m_cursorY > 0) {
+            m_cursorY--;
+            m_cursorX = m_cols -1;
+            m_screenBuffer[m_cursorY][m_cursorX].character = L' ';
+        }
     }
 
-    void TerminalBuffer::Tab() {
+    void TerminalBuffer::HorizontalTab() { // HT, \t
         int nextTabStop = (m_cursorX / TAB_WIDTH + 1) * TAB_WIDTH;
         if (nextTabStop >= m_cols) {
-            m_cursorX = m_cols - 1; // Go to last column or wrap
-            // If you want to wrap on tab past end of line:
-            // CarriageReturn();
-            // NewLine();
+            m_cursorX = m_cols - 1;
         }
         else {
             m_cursorX = nextTabStop;
         }
+    }
+
+    void TerminalBuffer::Bell() { // BEL, \a
+        MessageBeep(MB_OK);
     }
 }

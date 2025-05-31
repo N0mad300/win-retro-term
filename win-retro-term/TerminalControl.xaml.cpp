@@ -17,7 +17,7 @@ namespace winrt::win_retro_term::implementation
         m_dispatcherQueue = winrt::Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread();
 
         m_terminalBuffer = std::make_unique<Core::TerminalBuffer>(25, 80);
-        m_ansiParser = std::make_unique<Core::AnsiParser>(*m_terminalBuffer);
+        m_ansiParser = std::make_unique<Core::AnsiParser>(*m_terminalBuffer.get());
         m_renderer = std::make_unique<D3D11Renderer>();
         m_ptyProcess = std::make_unique<ConPtyProcess>();
 
@@ -44,12 +44,6 @@ namespace winrt::win_retro_term::implementation
         }
         else {
             OutputDebugStringA("TerminalControl: Failed to start ConPTY.\n");
-            // TODO: Display an error in the terminal UI
-            m_terminalBuffer->AddChar(L'E');
-            m_terminalBuffer->AddChar(L'R');
-            m_terminalBuffer->AddChar(L'R');
-            m_terminalBuffer->AddChar(L'O');
-            m_terminalBuffer->AddChar(L'R');
         }
     }
 

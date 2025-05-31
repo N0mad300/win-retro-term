@@ -110,6 +110,7 @@
   <ItemGroup>
     <ClInclude Include="Core\AnsiParser.h" />
     <ClInclude Include="Core\ConPtyProcess.h" />
+    <ClInclude Include="Core\ITerminalActions.h" />
     <ClInclude Include="Core\TerminalBuffer.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="App.xaml.h">

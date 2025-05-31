@@ -184,7 +184,7 @@ void D3D11Renderer::CreateDeviceResources() {
     // Create a solid color brush for text
     ThrowIfFailed(m_d2dContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::LightSkyBlue), &m_textBrush));
 
-    const wchar_t* defaultFontFamilyName = L"IBM 3270";
+    const wchar_t* defaultFontFamilyName = L"Print Char 21";
 
     BOOL fontExists = FALSE;
     UINT32 fontIndex = 0;

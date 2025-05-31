@@ -4,7 +4,11 @@
 
 namespace winrt::win_retro_term::Core 
 {
-    AnsiParser::AnsiParser(TerminalBuffer& buffer) : m_terminalBuffer(buffer) {}
+    AnsiParser::AnsiParser(ITerminalActions& actions) : m_terminalActions(actions), m_currentState(ParserState::GROUND) {}
+
+    void AnsiParser::ClearSequenceState() 
+    {
+    }
 
     void AnsiParser::Parse(const char* data, size_t length) 
     {
@@ -28,84 +32,99 @@ namespace winrt::win_retro_term::Core
             wideString.resize(wideCharCount);
             MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, currentData.data(), static_cast<int>(currentData.size()), &wideString[0], wideCharCount);
         }
-        else {
-            // Handle error or potential partial sequence.
-            // If MultiByteToWideChar fails because the last bytes form an incomplete UTF-8 sequence,
-            // we should save those bytes for the next call.
+        else 
+        {
             DWORD error = GetLastError();
-            if (error == ERROR_NO_UNICODE_TRANSLATION) {
-                // This error can mean an invalid sequence or an incomplete one at the end.
-                // A more robust solution would analyze the byte sequence to determine
-                // how many bytes at the end form a valid partial UTF-8 character.
-                // For simplicity here, we'll assume it might be a partial sequence if it's near the end.
-                // This is a heuristic and not perfectly robust.
+            if (error == ERROR_NO_UNICODE_TRANSLATION) 
+            {
                 size_t bytesToKeep = 0;
-                if (currentData.size() >= 1 && (static_cast<unsigned char>(currentData.back()) & 0xC0) == 0xC0) bytesToKeep = 1; // Start of 2,3,4 byte seq
+                if (currentData.size() >= 1 && (static_cast<unsigned char>(currentData.back()) & 0xC0) == 0xC0) bytesToKeep = 1;
                 if (currentData.size() >= 2 && (static_cast<unsigned char>(currentData[currentData.size() - 2]) & 0xE0) == 0xE0 && (static_cast<unsigned char>(currentData.back()) & 0xC0) == 0x80) bytesToKeep = 2;
                 if (currentData.size() >= 3 && (static_cast<unsigned char>(currentData[currentData.size() - 3]) & 0xF0) == 0xF0 && (static_cast<unsigned char>(currentData[currentData.size() - 2]) & 0xC0) == 0x80 && (static_cast<unsigned char>(currentData.back()) & 0xC0) == 0x80) bytesToKeep = 3;
 
-                if (bytesToKeep > 0 && bytesToKeep < currentData.size()) {
+                if (bytesToKeep > 0 && bytesToKeep < currentData.size()) 
+                {
                     m_utf8PartialSequence.assign(currentData.end() - bytesToKeep, currentData.end());
                     // Try converting the part before the partial sequence
                     wideCharCount = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, currentData.data(), static_cast<int>(currentData.size() - bytesToKeep), nullptr, 0);
-                    if (wideCharCount > 0) {
+                    if (wideCharCount > 0) 
+                    {
                         wideString.resize(wideCharCount);
                         MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, currentData.data(), static_cast<int>(currentData.size() - bytesToKeep), &wideString[0], wideCharCount);
                     }
-                    else {
-                        // Still failed, or nothing to convert before partial
+                    else 
+                    {
                         OutputDebugStringA("AnsiParser: Failed to convert to wide char or no complete chars.\n");
                         return;
                     }
                 }
-                else if (bytesToKeep == currentData.size()) {
-                    // Entire buffer is potentially a partial sequence
+                else if (bytesToKeep == currentData.size()) 
+                {
                     m_utf8PartialSequence.assign(currentData.begin(), currentData.end());
-                    return; // Wait for more data
+                    return;
                 }
-                else {
+                else 
+                {
                     OutputDebugStringA("AnsiParser: MultiByteToWideChar failed with ERROR_NO_UNICODE_TRANSLATION.\n");
-                    return; // Or substitute with '?'
+                    return;
                 }
             }
-            else if (error != 0) {
+            else if (error != 0) 
+            {
                 OutputDebugStringA("AnsiParser: MultiByteToWideChar failed.\n");
-                return; // Or substitute with '?'
+                return;
             }
         }
 
-
         for (wchar_t wc : wideString) {
-            switch (wc) {
-            case L'\n': // Line Feed
-                m_terminalBuffer.NewLine();
-                break;
-            case L'\r': // Carriage Return
-                m_terminalBuffer.CarriageReturn();
-                break;
-            case L'\b': // Backspace
-                m_terminalBuffer.Backspace();
-                break;
-            case L'\t': // Tab
-                m_terminalBuffer.Tab();
-                break;
-            case 0x07: // BEL (Bell)
-                // TODO: Play a sound or flash screen
-                MessageBeep(MB_OK); // Simple beep for now
-                break;
-                // TODO: Add cases for ESC (0x1B) to start parsing escape sequences
-            default:
-                // For now, assume printable if not a control character we handle
-                // A more robust check would be iswcntrl or similar
-                if (wc >= 32 || wc < 0) { // Basic check for printable (and allow extended chars)
-                    m_terminalBuffer.AddChar(wc);
-                }
-                else {
-                    // OutputDebugString((L"Unhandled control char: " + std::to_wstring(static_cast<int>(wc)) + L"\n").c_str());
-                }
-                break;
-            }
+            ProcessChar(wc);
         }
     }
 
+    void AnsiParser::ProcessChar(wchar_t ch) {
+
+        switch (m_currentState) {
+        case ParserState::GROUND:
+            if (ch >= 0x20 && ch <= 0x7F) {
+                m_terminalActions.PrintChar(ch);
+            }
+            else if (ch == L'\x1B') { // ESC
+                ClearSequenceState();
+                m_currentState = ParserState::ESCAPE;
+            }
+            else if (ch == L'\n') { // LF
+                m_terminalActions.LineFeed();
+            }
+            else if (ch == L'\r') { // CR
+                m_terminalActions.CarriageReturn();
+            }
+            else if (ch == L'\b') { // BS
+                m_terminalActions.Backspace();
+            }
+            else if (ch == L'\t') { // HT
+                m_terminalActions.HorizontalTab();
+            }
+            else if (ch == L'\x07') { // BEL
+                m_terminalActions.Bell();
+            }
+            else if ((ch >= 0x00 && ch <= 0x1A) || (ch >= 0x1C && ch <= 0x1F)) {
+                m_terminalActions.ExecuteControlFunction(ch);
+            }
+            else if (ch >= 0x80) {
+                // This is a simplification. Proper C1 handling is more involved.
+                m_terminalActions.PrintChar(ch);
+            }
+            break;
+
+        case ParserState::ESCAPE:
+            m_currentState = ParserState::GROUND;
+            break;
+
+            // Future states will be added here
+        default:
+            OutputDebugStringA("AnsiParser: Reached unknown state, resetting to GROUND.\n");
+            m_currentState = ParserState::GROUND;
+            break;
+        }
+    }
 }

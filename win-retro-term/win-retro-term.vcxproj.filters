@@ -41,6 +41,9 @@
     <ClInclude Include="Core\AnsiParser.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="Core\ITerminalActions.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Wide310x150Logo.scale-200.png">

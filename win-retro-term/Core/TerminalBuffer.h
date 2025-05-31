@@ -1,7 +1,8 @@
 #pragma once
+#include "ITerminalActions.h"
 #include <string>
 #include <vector>
-#include <algorithm> // For std::fill, std::min, std::max
+#include <algorithm>
 
 namespace winrt::win_retro_term::Core 
 {
@@ -10,7 +11,7 @@ namespace winrt::win_retro_term::Core
         // Future: Add attributes like color, bold, etc.
     };
 
-    class TerminalBuffer {
+    class TerminalBuffer : public ITerminalActions {
     public:
         TerminalBuffer(int rows, int cols);
 
@@ -19,38 +20,37 @@ namespace winrt::win_retro_term::Core
         const std::vector<std::vector<Cell>>& GetScreenBuffer() const;
 
         void Clear();
+        void Resize(int newRows, int newCols);
         void ScrollUp(int linesToScroll = 1);
-
         void SetCursorPosition(int r, int c);
+
         int GetCursorRow() const { return m_cursorY; }
         int GetCursorCol() const { return m_cursorX; }
-
         int GetRows() const { return m_rows; }
         int GetCols() const { return m_cols; }
 
-        // Basic character insertion and control codes
-        void AddChar(wchar_t ch);
-        void NewLine();
-        void CarriageReturn();
-        void Backspace();
-        void Tab(); // Basic tab for now
+        // --- ITerminalActions Implementation ---
+        void PrintChar(wchar_t ch) override;
+        void ExecuteControlFunction(wchar_t control) override;
 
-        // Called when the PTY output indicates a resize
-        void Resize(int newRows, int newCols);
-
+        void LineFeed() override;
+        void CarriageReturn() override;
+        void Backspace() override;
+        void HorizontalTab() override;
+        void Bell() override;
 
     private:
         void EnsureCursorInBounds();
         void InitBuffer();
 
-
         int m_rows;
         int m_cols;
-        std::vector<std::vector<Cell>> m_screenBuffer; // The main grid
+
+        std::vector<std::vector<Cell>> m_screenBuffer;
 
         int m_cursorX;
         int m_cursorY;
 
-        const int TAB_WIDTH = 8; // Typical tab width
+        const int TAB_WIDTH = 8;
     };
 }
