@@ -2,14 +2,14 @@
 #include "AnsiParser.h"
 #include <Windows.h>
 
-namespace winrt::win_retro_term::Core 
+namespace winrt::win_retro_term::Core
 {
-    AnsiParser::AnsiParser(ITerminalActions& actions) : m_terminalActions(actions), m_currentState(ParserState::GROUND) 
+    AnsiParser::AnsiParser(ITerminalActions& actions) : m_terminalActions(actions), m_currentState(ParserState::GROUND)
     {
         ClearSequenceState();
     }
 
-    void AnsiParser::ClearSequenceState() 
+    void AnsiParser::ClearSequenceState()
     {
         m_params.clear();
         m_intermediates.clear();
@@ -47,6 +47,9 @@ namespace winrt::win_retro_term::Core
 
     int AnsiParser::GetParam(size_t index, int defaultValue) const {
         if (index < m_params.size()) {
+            if (m_params[index] == 0 && defaultValue != 0) {
+                return defaultValue;
+            }
             return m_params[index];
         }
         return defaultValue;
@@ -62,9 +65,56 @@ namespace winrt::win_retro_term::Core
         OutputDebugString(L"} Intermediates: '");
         OutputDebugString(m_intermediates.c_str());
         OutputDebugString(L"'\n");
+
+        if (!m_intermediates.empty() && m_intermediates != L"?" && m_intermediates != L"!") {
+            OutputDebugString((L"AnsiParser: CSI Dispatch with unhandled intermediates '" + m_intermediates + L"', ignoring for now.\n").c_str());
+            return;
+        }
+
+        switch (finalChar) {
+        case L'A': // CUU - Cursor Up
+            if (m_intermediates.empty()) {
+                m_terminalActions.CursorUp(GetParam(0, 1));
+            }
+            break;
+        case L'B': // CUD - Cursor Down
+            if (m_intermediates.empty()) {
+                m_terminalActions.CursorDown(GetParam(0, 1));
+            }
+            break;
+        case L'C': // CUF - Cursor Forward
+            if (m_intermediates.empty()) {
+                m_terminalActions.CursorForward(GetParam(0, 1));
+            }
+            break;
+        case L'D': // CUB - Cursor Back
+            if (m_intermediates.empty()) {
+                m_terminalActions.CursorBack(GetParam(0, 1));
+            }
+            break;
+        case L'H': // CUP - Cursor Position
+        case L'f': // HVP - Horizontal and Vertical Position (same as CUP)
+            if (m_intermediates.empty()) {
+                m_terminalActions.CursorPosition(GetParam(0, 1), GetParam(1, 1));
+            }
+            break;
+        case L'J': // ED - Erase in Display
+            if (m_intermediates.empty() || m_intermediates == L"?") { // CSI ? J is DECSED
+                m_terminalActions.EraseInDisplay(GetParam(0, 0));
+            }
+            break;
+        case L'K': // EL - Erase in Line
+            if (m_intermediates.empty() || m_intermediates == L"?") { // CSI ? K is DECSEL
+                m_terminalActions.EraseInLine(GetParam(0, 0));
+            }
+            break;
+        default:
+            OutputDebugString((L"AnsiParser: Unhandled CSI final character: '" + std::wstring(1, finalChar) + L"' with intermediates '" + m_intermediates + L"'\n").c_str());
+            break;
+        }
     }
 
-    void AnsiParser::Parse(const char* data, size_t length) 
+    void AnsiParser::Parse(const char* data, size_t length)
     {
         if (length == 0) return;
 
@@ -86,44 +136,44 @@ namespace winrt::win_retro_term::Core
             wideString.resize(wideCharCount);
             MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, currentData.data(), static_cast<int>(currentData.size()), &wideString[0], wideCharCount);
         }
-        else 
+        else
         {
             DWORD error = GetLastError();
-            if (error == ERROR_NO_UNICODE_TRANSLATION) 
+            if (error == ERROR_NO_UNICODE_TRANSLATION)
             {
                 size_t bytesToKeep = 0;
                 if (currentData.size() >= 1 && (static_cast<unsigned char>(currentData.back()) & 0xC0) == 0xC0) bytesToKeep = 1;
                 if (currentData.size() >= 2 && (static_cast<unsigned char>(currentData[currentData.size() - 2]) & 0xE0) == 0xE0 && (static_cast<unsigned char>(currentData.back()) & 0xC0) == 0x80) bytesToKeep = 2;
                 if (currentData.size() >= 3 && (static_cast<unsigned char>(currentData[currentData.size() - 3]) & 0xF0) == 0xF0 && (static_cast<unsigned char>(currentData[currentData.size() - 2]) & 0xC0) == 0x80 && (static_cast<unsigned char>(currentData.back()) & 0xC0) == 0x80) bytesToKeep = 3;
 
-                if (bytesToKeep > 0 && bytesToKeep < currentData.size()) 
+                if (bytesToKeep > 0 && bytesToKeep < currentData.size())
                 {
                     m_utf8PartialSequence.assign(currentData.end() - bytesToKeep, currentData.end());
                     // Try converting the part before the partial sequence
                     wideCharCount = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, currentData.data(), static_cast<int>(currentData.size() - bytesToKeep), nullptr, 0);
-                    if (wideCharCount > 0) 
+                    if (wideCharCount > 0)
                     {
                         wideString.resize(wideCharCount);
                         MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, currentData.data(), static_cast<int>(currentData.size() - bytesToKeep), &wideString[0], wideCharCount);
                     }
-                    else 
+                    else
                     {
                         OutputDebugStringA("AnsiParser: Failed to convert to wide char or no complete chars.\n");
                         return;
                     }
                 }
-                else if (bytesToKeep == currentData.size()) 
+                else if (bytesToKeep == currentData.size())
                 {
                     m_utf8PartialSequence.assign(currentData.begin(), currentData.end());
                     return;
                 }
-                else 
+                else
                 {
                     OutputDebugStringA("AnsiParser: MultiByteToWideChar failed with ERROR_NO_UNICODE_TRANSLATION.\n");
                     return;
                 }
             }
-            else if (error != 0) 
+            else if (error != 0)
             {
                 OutputDebugStringA("AnsiParser: MultiByteToWideChar failed.\n");
                 return;
@@ -135,8 +185,8 @@ namespace winrt::win_retro_term::Core
         }
     }
 
-    void AnsiParser::ProcessChar(wchar_t ch) {
-
+    void AnsiParser::ProcessChar(wchar_t ch)
+    {
         switch (m_currentState) {
         case ParserState::GROUND:
             if (ch >= 0x20 && ch <= 0x7F) {
@@ -183,12 +233,12 @@ namespace winrt::win_retro_term::Core
             {
                 m_currentState = ParserState::OSC_STRING;
             }
-            else if (ch >= 0x28 && ch <= 0x2F ) 
+            else if (ch >= 0x28 && ch <= 0x2F)
             {
-               CollectIntermediate(ch);
-               m_currentState = ParserState::ESCAPE_INTERMEDIATE;
+                CollectIntermediate(ch);
+                m_currentState = ParserState::ESCAPE_INTERMEDIATE;
             }
-            else 
+            else
             {
                 m_currentState = ParserState::GROUND;
             }

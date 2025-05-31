@@ -19,6 +19,15 @@ namespace winrt::win_retro_term::Core
         virtual void Backspace() = 0;        // BS, \b
         virtual void HorizontalTab() = 0;    // HT, \t
         virtual void Bell() = 0;             // BEL, \a
+
+        virtual void CursorUp(int count) = 0;           // CUU: CSI Pn A
+        virtual void CursorDown(int count) = 0;         // CUD: CSI Pn B
+        virtual void CursorForward(int count) = 0;      // CUF: CSI Pn C
+        virtual void CursorBack(int count) = 0;         // CUB: CSI Pn D
+        virtual void CursorPosition(int row, int col) = 0; // CUP: CSI Pn ; Pn H (or f)
+
+        virtual void EraseInDisplay(int mode) = 0;      // ED:  CSI Ps J
+        virtual void EraseInLine(int mode) = 0;         // EL:  CSI Ps K
     };
 
 }

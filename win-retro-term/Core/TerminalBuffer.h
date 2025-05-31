@@ -39,6 +39,15 @@ namespace winrt::win_retro_term::Core
         void HorizontalTab() override;
         void Bell() override;
 
+        void CursorUp(int count) override;
+        void CursorDown(int count) override;
+        void CursorForward(int count) override;
+        void CursorBack(int count) override;
+        void CursorPosition(int row, int col) override;
+
+        void EraseInDisplay(int mode) override;
+        void EraseInLine(int mode) override;
+
     private:
         void EnsureCursorInBounds();
         void InitBuffer();
