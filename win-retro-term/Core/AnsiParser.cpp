@@ -4,10 +4,64 @@
 
 namespace winrt::win_retro_term::Core 
 {
-    AnsiParser::AnsiParser(ITerminalActions& actions) : m_terminalActions(actions), m_currentState(ParserState::GROUND) {}
+    AnsiParser::AnsiParser(ITerminalActions& actions) : m_terminalActions(actions), m_currentState(ParserState::GROUND) 
+    {
+        ClearSequenceState();
+    }
 
     void AnsiParser::ClearSequenceState() 
     {
+        m_params.clear();
+        m_intermediates.clear();
+    }
+
+    void AnsiParser::ParamDigit(wchar_t digit) {
+        if (m_params.empty()) {
+            m_params.push_back(0);
+        }
+        int currentParamIndex = static_cast<int>(m_params.size() - 1);
+        long long val = m_params[currentParamIndex];
+        val = val * 10 + (digit - L'0');
+
+        // Clamp to avoid overflow, typical terminal int range
+        if (val > std::numeric_limits<int>::max()) {
+            val = std::numeric_limits<int>::max();
+        }
+        m_params[currentParamIndex] = static_cast<int>(val);
+    }
+
+    void AnsiParser::ParamSeparator() {
+        if (m_params.size() < MAX_PARAMS) {
+            if (m_params.empty()) {
+                m_params.push_back(0);
+            }
+            m_params.push_back(0);
+        }
+    }
+
+    void AnsiParser::CollectIntermediate(wchar_t ch) {
+        if (m_intermediates.length() < 16) {
+            m_intermediates += ch;
+        }
+    }
+
+    int AnsiParser::GetParam(size_t index, int defaultValue) const {
+        if (index < m_params.size()) {
+            return m_params[index];
+        }
+        return defaultValue;
+    }
+
+    void AnsiParser::DispatchCsi(wchar_t finalChar) {
+        OutputDebugString((L"AnsiParser: CSI Dispatch - Final: '" + std::wstring(1, finalChar) + L"'").c_str());
+        OutputDebugString(L" Params: {");
+        for (size_t i = 0; i < m_params.size(); ++i) {
+            OutputDebugString(std::to_wstring(m_params[i]).c_str());
+            if (i < m_params.size() - 1) OutputDebugString(L", ");
+        }
+        OutputDebugString(L"} Intermediates: '");
+        OutputDebugString(m_intermediates.c_str());
+        OutputDebugString(L"'\n");
     }
 
     void AnsiParser::Parse(const char* data, size_t length) 
@@ -117,7 +171,98 @@ namespace winrt::win_retro_term::Core
             break;
 
         case ParserState::ESCAPE:
-            m_currentState = ParserState::GROUND;
+            if (ch == L'[') // CSI
+            {
+                m_currentState = ParserState::CSI_ENTRY;
+            }
+            else if (ch == L'P') // DCS
+            {
+                m_currentState = ParserState::DCS_ENTRY;
+            }
+            else if (ch == L']') // OSC
+            {
+                m_currentState = ParserState::OSC_STRING;
+            }
+            else if (ch >= 0x28 && ch <= 0x2F ) 
+            {
+               CollectIntermediate(ch);
+               m_currentState = ParserState::ESCAPE_INTERMEDIATE;
+            }
+            else 
+            {
+                m_currentState = ParserState::GROUND;
+            }
+            break;
+
+
+        case ParserState::CSI_ENTRY:
+            if (ch >= L'0' && ch <= L'9') { // Parameter digit
+                ParamDigit(ch);
+                m_currentState = ParserState::CSI_PARAM;
+            }
+            else if (ch == L';') { // Parameter separator
+                ParamSeparator();
+                m_currentState = ParserState::CSI_PARAM;
+            }
+            else if (ch >= L'<' && ch <= L'?') { // Private parameter characters: < = > ?
+                CollectIntermediate(ch);
+                m_currentState = ParserState::CSI_INTERMEDIATE;
+            }
+            else if (ch >= 0x20 && ch <= 0x2F) { // Intermediate characters ! " # $ % & ' ( ) * + , - . /
+                CollectIntermediate(ch);
+                m_currentState = ParserState::CSI_INTERMEDIATE;
+            }
+            else if (ch >= 0x40 && ch <= 0x7E) { // Final character for CSI sequence
+                DispatchCsi(ch);
+                m_currentState = ParserState::GROUND;
+            }
+            else if (ch == 0x1B) { // ESC within CSI (abort)
+                m_currentState = ParserState::GROUND;
+            }
+            else {
+                // Unexpected char in CSI_ENTRY
+                m_currentState = ParserState::GROUND;
+            }
+            break;
+
+        case ParserState::CSI_PARAM:
+            if (ch >= L'0' && ch <= L'9') { // Parameter digit
+                ParamDigit(ch);
+            }
+            else if (ch == L';') { // Parameter separator
+                ParamSeparator();
+            }
+            else if (ch >= 0x20 && ch <= 0x2F) { // Intermediate characters
+                CollectIntermediate(ch);
+                m_currentState = ParserState::CSI_INTERMEDIATE;
+            }
+            else if (ch >= 0x40 && ch <= 0x7E) { // Final character
+                DispatchCsi(ch);
+                m_currentState = ParserState::GROUND;
+            }
+            else if (ch == 0x1B) { // ESC within CSI (abort)
+                m_currentState = ParserState::GROUND;
+            }
+            else {
+                // Unexpected char in CSI_PARAM
+                m_currentState = ParserState::GROUND;
+            }
+            break;
+
+        case ParserState::CSI_INTERMEDIATE:
+            if (ch >= 0x20 && ch <= 0x2F) { // More intermediate characters
+                CollectIntermediate(ch);
+            }
+            else if (ch >= 0x40 && ch <= 0x7E) { // Final character
+                DispatchCsi(ch);
+                m_currentState = ParserState::GROUND;
+            }
+            else if (ch == 0x1B) { // ESC within CSI (abort)
+                m_currentState = ParserState::GROUND;
+            }
+            else {
+                m_currentState = ParserState::GROUND; // Or an IGNORE state
+            }
             break;
 
             // Future states will be added here
