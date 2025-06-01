@@ -4,14 +4,29 @@
 
 namespace winrt::win_retro_term::Core 
 {
-    TerminalBuffer::TerminalBuffer(int rows, int cols)
-        : m_rows(rows), m_cols(cols), m_cursorX(0), m_cursorY(0) {
+    TerminalBuffer::TerminalBuffer(int rows, int cols) : m_rows(rows), m_cols(cols), m_cursorX(0), m_cursorY(0)
+    {
+        m_defaultAttributes.foregroundColor = AnsiColor::Foreground;
+        m_defaultAttributes.backgroundColor = AnsiColor::Background;
+        m_defaultAttributes.attributes = CellAttributesFlags::None;
+        m_currentAttributes = m_defaultAttributes;
+
         InitBuffer();
     }
 
     void TerminalBuffer::InitBuffer() {
         m_screenBuffer.assign(m_rows, std::vector<Cell>(m_cols));
-        // Initialize cells if needed (default Cell constructor does L' ')
+        
+        Cell defaultCell;
+        defaultCell.foregroundColor = m_defaultAttributes.foregroundColor;
+        defaultCell.backgroundColor = m_defaultAttributes.backgroundColor;
+        defaultCell.attributes = m_defaultAttributes.attributes;
+
+        for (int r = 0; r < m_rows; ++r) {
+            for (int c = 0; c < m_cols; ++c) {
+                m_screenBuffer[r][c] = defaultCell;
+            }
+        }
     }
 
     void TerminalBuffer::Resize(int newRows, int newCols) {
@@ -58,6 +73,9 @@ namespace winrt::win_retro_term::Core
         for (int r = 0; r < m_rows; ++r) {
             for (int c = 0; c < m_cols; ++c) {
                 m_screenBuffer[r][c].character = L' ';
+                m_screenBuffer[r][c].foregroundColor = m_defaultAttributes.foregroundColor;
+                m_screenBuffer[r][c].backgroundColor = m_defaultAttributes.backgroundColor;
+                m_screenBuffer[r][c].attributes = m_defaultAttributes.attributes;
             }
         }
         m_cursorX = 0;
@@ -75,10 +93,14 @@ namespace winrt::win_retro_term::Core
         for (int r = 0; r < m_rows - linesToScroll; ++r) {
             m_screenBuffer[r] = m_screenBuffer[r + linesToScroll];
         }
+
+        Cell defaultCellWithSpace = m_defaultAttributes;
+        defaultCellWithSpace.character = L' ';
+
         // Clear the new lines at the bottom
         for (int r = m_rows - linesToScroll; r < m_rows; ++r) {
             for (int c = 0; c < m_cols; ++c) {
-                m_screenBuffer[r][c].character = L' ';
+                m_screenBuffer[r][c] = defaultCellWithSpace;
             }
         }
     }
@@ -106,6 +128,9 @@ namespace winrt::win_retro_term::Core
 
         if (m_cursorY < m_rows && m_cursorX < m_cols) {
             m_screenBuffer[m_cursorY][m_cursorX].character = ch;
+            m_screenBuffer[m_cursorY][m_cursorX].foregroundColor = m_currentAttributes.foregroundColor;
+            m_screenBuffer[m_cursorY][m_cursorX].backgroundColor = m_currentAttributes.backgroundColor;
+            m_screenBuffer[m_cursorY][m_cursorX].attributes = m_currentAttributes.attributes;
             m_cursorX++;
         }
     }
@@ -184,42 +209,29 @@ namespace winrt::win_retro_term::Core
         // Ps = 2: Erase entire screen (cursor position does not change).
         // Ps = 3: Erase entire screen + scrollback buffer (DEC specific, Windows Terminal supports). For now, treat as 2.
 
+        Cell defaultCellWithSpace = m_defaultAttributes;
+        defaultCellWithSpace.character = L' ';
+
         switch (mode) {
         case 0: // From cursor to end
-            // Erase current line from cursor to end
-            for (int c = m_cursorX; c < m_cols; ++c) {
-                m_screenBuffer[m_cursorY][c].character = L' ';
-                // TODO: Reset attributes
-            }
-            // Erase subsequent lines
-            for (int r = m_cursorY + 1; r < m_rows; ++r) {
-                for (int c = 0; c < m_cols; ++c) {
-                    m_screenBuffer[r][c].character = L' ';
-                    // TODO: Reset attributes
-                }
+            for (int c = m_cursorX; c < m_cols; ++c) m_screenBuffer[m_cursorY][c] = defaultCellWithSpace;
+            for (int r = m_cursorY + 1; r < m_rows; ++r) 
+            {
+                for (int c = 0; c < m_cols; ++c) m_screenBuffer[r][c] = defaultCellWithSpace;
             }
             break;
         case 1: // From beginning to cursor
-            // Erase previous lines
-            for (int r = 0; r < m_cursorY; ++r) {
-                for (int c = 0; c < m_cols; ++c) {
-                    m_screenBuffer[r][c].character = L' ';
-                    // TODO: Reset attributes
-                }
+            for (int r = 0; r < m_cursorY; ++r) 
+            {
+                for (int c = 0; c < m_cols; ++c) m_screenBuffer[r][c] = defaultCellWithSpace;
             }
-            // Erase current line from beginning to cursor
-            for (int c = 0; c <= m_cursorX; ++c) {
-                m_screenBuffer[m_cursorY][c].character = L' ';
-                // TODO: Reset attributes
-            }
+            for (int c = 0; c <= m_cursorX; ++c) m_screenBuffer[m_cursorY][c] = defaultCellWithSpace;
             break;
         case 2: // Erase entire screen
         case 3: // Erase entire screen + scrollback (treat as 2 for now)
-            for (int r = 0; r < m_rows; ++r) {
-                for (int c = 0; c < m_cols; ++c) {
-                    m_screenBuffer[r][c].character = L' ';
-                    // TODO: Reset attributes
-                }
+            for (int r = 0; r < m_rows; ++r) 
+            {
+                for (int c = 0; c < m_cols; ++c) m_screenBuffer[r][c] = defaultCellWithSpace;
             }
             // Cursor position does NOT change for ED with Ps=2 or Ps=3
             break;
@@ -236,30 +248,132 @@ namespace winrt::win_retro_term::Core
         // Ps = 2: Erase entire line (cursor position does not change).
         if (m_cursorY < 0 || m_cursorY >= m_rows) return;
 
+        Cell defaultCellWithSpace = m_defaultAttributes;
+        defaultCellWithSpace.character = L' ';
+
         switch (mode) {
         case 0: // From cursor to end of line
             for (int c = m_cursorX; c < m_cols; ++c) {
-                m_screenBuffer[m_cursorY][c].character = L' ';
-                // TODO: Reset attributes
+                m_screenBuffer[m_cursorY][c] = defaultCellWithSpace;
             }
             break;
         case 1: // From beginning of line to cursor
             for (int c = 0; c <= m_cursorX; ++c) {
                 if (c < m_cols) { // Boundary check
-                    m_screenBuffer[m_cursorY][c].character = L' ';
-                    // TODO: Reset attributes
+                    m_screenBuffer[m_cursorY][c] = defaultCellWithSpace;
                 }
             }
             break;
         case 2: // Erase entire line
             for (int c = 0; c < m_cols; ++c) {
-                m_screenBuffer[m_cursorY][c].character = L' ';
-                // TODO: Reset attributes
+                m_screenBuffer[m_cursorY][c] = defaultCellWithSpace;
             }
             break;
         default:
             // Unknown mode, ignore
             break;
+        }
+    }
+
+    void TerminalBuffer::SetGraphicsRendition(const std::vector<int>& params) {
+        if (params.empty()) {
+            m_currentAttributes = m_defaultAttributes;
+            return;
+        }
+
+        for (size_t i = 0; i < params.size(); ++i) {
+            int p = params[i];
+            if (p == 0) { // Reset / Normal
+                m_currentAttributes = m_defaultAttributes;
+            }
+            else if (p == 1) { // Bold or increased intensity
+                m_currentAttributes.attributes |= CellAttributesFlags::Bold;
+            }
+            else if (p == 2) { // Dim
+                m_currentAttributes.attributes |= CellAttributesFlags::Dim;
+                m_currentAttributes.attributes = m_currentAttributes.attributes & ~CellAttributesFlags::Bold; // Faint typically overrides Bold
+            }
+            else if (p == 3) { // Italic
+                m_currentAttributes.attributes |= CellAttributesFlags::Italic;
+            }
+            else if (p == 4) { // Underline
+                m_currentAttributes.attributes |= CellAttributesFlags::Underline;
+            }
+            else if (p == 7) { // Inverse video
+                m_currentAttributes.attributes |= CellAttributesFlags::Inverse;
+            }
+            else if (p == 8) { // Concealed (not visible)
+                m_currentAttributes.attributes |= CellAttributesFlags::Concealed;
+            }
+            else if (p == 9) { // Strikethrough / crossed-out
+                m_currentAttributes.attributes |= CellAttributesFlags::Strikethrough;
+            }
+            else if (p == 21) { // Doubly underlined (treat as single underline for now)
+                m_currentAttributes.attributes |= CellAttributesFlags::Underline;
+            }
+            else if (p == 22) { // Normal intensity (neither bold nor dim)
+                m_currentAttributes.attributes = m_currentAttributes.attributes & ~CellAttributesFlags::Bold;
+                m_currentAttributes.attributes = m_currentAttributes.attributes & ~CellAttributesFlags::Dim;
+            }
+            else if (p == 23) { // Not italic
+                m_currentAttributes.attributes = m_currentAttributes.attributes & ~CellAttributesFlags::Italic;
+            }
+            else if (p == 24) { // Not underlined
+                m_currentAttributes.attributes = m_currentAttributes.attributes & ~CellAttributesFlags::Underline;
+            }
+            else if (p == 27) { // Not inverse
+                m_currentAttributes.attributes = m_currentAttributes.attributes & ~CellAttributesFlags::Inverse;
+            }
+            else if (p == 28) { // Not concealed
+                m_currentAttributes.attributes = m_currentAttributes.attributes & ~CellAttributesFlags::Concealed;
+            }
+            else if (p == 29) { // Not strikethrough
+                m_currentAttributes.attributes = m_currentAttributes.attributes & ~CellAttributesFlags::Strikethrough;
+            }
+            // Basic 3/4-bit ANSI Colors
+            else if (p >= 30 && p <= 37) { // Set foreground color
+                m_currentAttributes.foregroundColor = static_cast<AnsiColor>(p - 30);
+            }
+            else if (p == 39) { // Default foreground color
+                m_currentAttributes.foregroundColor = m_defaultAttributes.foregroundColor;
+            }
+            else if (p >= 40 && p <= 47) { // Set background color
+                m_currentAttributes.backgroundColor = static_cast<AnsiColor>(p - 40);
+            }
+            else if (p == 49) { // Default background color
+                m_currentAttributes.backgroundColor = m_defaultAttributes.backgroundColor;
+            }
+            // Bright 3/4-bit ANSI Colors
+            else if (p >= 90 && p <= 97) { // Set bright foreground color
+                m_currentAttributes.foregroundColor = static_cast<AnsiColor>((p - 90) + 8); // Offset by 8 for bright
+            }
+            else if (p >= 100 && p <= 107) { // Set bright background color
+                m_currentAttributes.backgroundColor = static_cast<AnsiColor>((p - 100) + 8); // Offset by 8 for bright
+            }
+            // 8-bit (256) colors: 38 ; 5 ; P s or 48 ; 5 ; P s
+            else if (p == 38 || p == 48) {
+                if (i + 2 < params.size()) {
+                    int colorMode = params[i + 1];
+                    int colorValue = params[i + 2];
+                    if (colorMode == 5) { // 256-color palette
+                        if (colorValue >= 0 && colorValue <= 255) {
+                            AnsiColor mappedColor = AnsiColor::White;
+                            if (colorValue < 8) mappedColor = static_cast<AnsiColor>(colorValue);
+                            else if (colorValue < 16) mappedColor = static_cast<AnsiColor>(static_cast<uint8_t>(colorValue - 8) + static_cast<uint8_t>(AnsiColor::BrightBlack));
+
+                            if (p == 38) m_currentAttributes.foregroundColor = mappedColor;
+                            else m_currentAttributes.backgroundColor = mappedColor;
+                        }
+                    }
+                    else if (colorMode == 2) {
+                        if (i + 4 < params.size()) {
+                            // TODO: Store RGB directly in Cell and signal renderer to use it.
+                            i += 2;
+                        }
+                    }
+                    i += 2;
+                }
+            }
         }
     }
 }

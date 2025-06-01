@@ -55,7 +55,6 @@ private:
     Microsoft::WRL::ComPtr<ID2D1Device2>          m_d2dDevice;
     Microsoft::WRL::ComPtr<ID2D1DeviceContext2>   m_d2dContext;
     Microsoft::WRL::ComPtr<ID2D1Bitmap1>          m_d2dTargetBitmap;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>  m_textBrush;
     Microsoft::WRL::ComPtr<IDWriteTextFormat>     m_textFormat;
 
     // Cached Panel and properties
@@ -79,4 +78,17 @@ private:
     float m_lineHeight = 16.0f;
 
     void UpdateFontMetrics();
+
+    // Brushes for different ANSI colors (or a map/vector of brushes)
+    std::vector<Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>> m_colorBrushes;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>  m_defaultFgBrush;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>  m_defaultBgBrush;
+
+    // Text Formats for different styles (bold, italic)
+    Microsoft::WRL::ComPtr<IDWriteTextFormat>     m_textFormatNormal;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat>     m_textFormatBold;
+
+    void CreateColorPaletteBrushes();
+    void CreateTextFormats();
+    D2D1_COLOR_F GetD2DColor(winrt::win_retro_term::Core::AnsiColor color, bool isForeground);
 };

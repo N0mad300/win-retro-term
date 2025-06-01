@@ -28,6 +28,8 @@ namespace winrt::win_retro_term::Core
 
         virtual void EraseInDisplay(int mode) = 0;      // ED:  CSI Ps J
         virtual void EraseInLine(int mode) = 0;         // EL:  CSI Ps K
+
+        virtual void SetGraphicsRendition(const std::vector<int>& params) = 0; // SGR
     };
 
 }

@@ -182,36 +182,8 @@ void D3D11Renderer::CreateDeviceResources() {
     ThrowIfFailed(m_d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &m_d2dContext));
 
     // Create a solid color brush for text
-    ThrowIfFailed(m_d2dContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::LightSkyBlue), &m_textBrush));
-
-    const wchar_t* defaultFontFamilyName = L"Print Char 21";
-
-    BOOL fontExists = FALSE;
-    UINT32 fontIndex = 0;
-
-    if (m_retroFontCollection) {
-        // Check if the desired default font family exists in our custom collection
-        m_retroFontCollection->FindFamilyName(defaultFontFamilyName, &fontIndex, &fontExists);
-    }
-
-    if (m_retroFontCollection && fontExists) {
-        OutputDebugString((L"Using custom font: " + std::wstring(defaultFontFamilyName) + L" for TextFormat.\n").c_str());
-        ThrowIfFailed(m_dwriteFactory->CreateTextFormat(
-            defaultFontFamilyName,
-            m_retroFontCollection.Get(),
-            DWRITE_FONT_WEIGHT_NORMAL,
-            DWRITE_FONT_STYLE_NORMAL,
-            DWRITE_FONT_STRETCH_NORMAL,
-            15.0f,
-            L"en-US",
-            &m_textFormat
-        ));
-    }
-
-    ThrowIfFailed(m_textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
-    ThrowIfFailed(m_textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
-
-    UpdateFontMetrics();
+    CreateColorPaletteBrushes();
+    CreateTextFormats();
 
     m_deviceLost = false;
 }
@@ -357,6 +329,94 @@ float D3D11Renderer::GetFontCharHeight() const {
     return m_lineHeight > 0 ? m_lineHeight : 16.0f;
 }
 
+D2D1_COLOR_F D3D11Renderer::GetD2DColor(winrt::win_retro_term::Core::AnsiColor color, bool isForeground) 
+{
+    static const D2D1_COLOR_F ansiPalette[] = {
+        D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f),        // Black
+        D2D1::ColorF(0.66f, 0.0f, 0.0f, 1.0f),       // Red (darker)
+        D2D1::ColorF(0.0f, 0.66f, 0.0f, 1.0f),       // Green (darker)
+        D2D1::ColorF(0.66f, 0.66f, 0.0f, 1.0f),      // Yellow (darker, often brown)
+        D2D1::ColorF(0.0f, 0.0f, 0.66f, 1.0f),       // Blue (darker)
+        D2D1::ColorF(0.66f, 0.0f, 0.66f, 1.0f),      // Magenta (darker)
+        D2D1::ColorF(0.0f, 0.66f, 0.66f, 1.0f),      // Cyan (darker)
+        D2D1::ColorF(0.82f, 0.82f, 0.82f, 1.0f),     // White (light gray)
+
+        D2D1::ColorF(0.33f, 0.33f, 0.33f, 1.0f),     // Bright Black (dark gray)
+        D2D1::ColorF(1.0f, 0.2f, 0.2f, 1.0f),        // Bright Red
+        D2D1::ColorF(0.2f, 1.0f, 0.2f, 1.0f),        // Bright Green
+        D2D1::ColorF(1.0f, 1.0f, 0.2f, 1.0f),        // Bright Yellow
+        D2D1::ColorF(0.2f, 0.2f, 1.0f, 1.0f),        // Bright Blue
+        D2D1::ColorF(1.0f, 0.2f, 1.0f, 1.0f),        // Bright Magenta
+        D2D1::ColorF(0.2f, 1.0f, 1.0f, 1.0f),        // Bright Cyan
+        D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f),        // Bright White
+    };
+    static const D2D1_COLOR_F defaultTermFg = D2D1::ColorF(0.82f, 0.82f, 0.82f, 1.0f); // Light Gray
+    static const D2D1_COLOR_F defaultTermBg = D2D1::ColorF(0.02f, 0.02f, 0.08f, 1.0f); // Dark Blue (matches current clear)
+
+    if (color == winrt::win_retro_term::Core::AnsiColor::Foreground) return defaultTermFg;
+    if (color == winrt::win_retro_term::Core::AnsiColor::Background) return defaultTermBg;
+
+    uint8_t index = static_cast<uint8_t>(color);
+    if (index < ARRAYSIZE(ansiPalette)) {
+        return ansiPalette[index];
+    }
+    return isForeground ? defaultTermFg : defaultTermBg;
+}
+
+void D3D11Renderer::CreateColorPaletteBrushes() {
+    if (!m_d2dContext) return;
+    m_colorBrushes.clear();
+    m_colorBrushes.resize(18);
+
+    for (uint8_t i = 0; i < 16; ++i) {
+        ThrowIfFailed(m_d2dContext->CreateSolidColorBrush(
+            GetD2DColor(static_cast<winrt::win_retro_term::Core::AnsiColor>(i), true),
+            &m_colorBrushes[i]
+        ));
+    }
+
+    ThrowIfFailed(m_d2dContext->CreateSolidColorBrush(
+        GetD2DColor(winrt::win_retro_term::Core::AnsiColor::Foreground, true),
+        &m_defaultFgBrush
+    ));
+    m_colorBrushes[static_cast<uint8_t>(winrt::win_retro_term::Core::AnsiColor::Foreground)] = m_defaultFgBrush;
+
+    ThrowIfFailed(m_d2dContext->CreateSolidColorBrush(
+        GetD2DColor(winrt::win_retro_term::Core::AnsiColor::Background, false),
+        &m_defaultBgBrush
+    ));
+    m_colorBrushes[static_cast<uint8_t>(winrt::win_retro_term::Core::AnsiColor::Background)] = m_defaultBgBrush;
+}
+
+void D3D11Renderer::CreateTextFormats() {
+    if (!m_dwriteFactory) return;
+
+    const wchar_t* fontFamilyName = L"zrzef";
+    float fontSize = 15.0f;
+    Microsoft::WRL::ComPtr<IDWriteFontCollection> fontCollection = m_retroFontCollection;
+    if (!fontCollection) { // Fallback if custom collection failed
+        ThrowIfFailed(m_dwriteFactory->GetSystemFontCollection(&fontCollection, false));
+        fontFamilyName = L"Consolas"; // Fallback font
+    }
+
+    // Normal
+    ThrowIfFailed(m_dwriteFactory->CreateTextFormat(
+        fontFamilyName, fontCollection.Get(), DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+        fontSize, L"en-US", &m_textFormatNormal));
+    m_textFormatNormal->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    m_textFormatNormal->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+
+    // Bold
+    ThrowIfFailed(m_dwriteFactory->CreateTextFormat(
+        fontFamilyName, fontCollection.Get(), DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+        fontSize, L"en-US", &m_textFormatBold));
+    m_textFormatBold->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    m_textFormatBold->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+
+    m_textFormat = m_textFormatNormal;
+    UpdateFontMetrics();
+}
+
 void D3D11Renderer::SetLogicalSize(winrt::Windows::Foundation::Size logicalSize) {
     if (m_logicalSize.Width != logicalSize.Width || m_logicalSize.Height != logicalSize.Height) {
         m_logicalSize = logicalSize;
@@ -416,81 +476,124 @@ void D3D11Renderer::ValidateDevice() {
 
 void D3D11Renderer::Render() {
     if (!m_isInitialized || m_deviceLost || !m_terminalBufferPtr) return;
-    if (!m_renderTargetView || !m_d2dContext || !m_d2dTargetBitmap) return;
+    if (!m_renderTargetView || !m_d2dContext || !m_d2dTargetBitmap || m_colorBrushes.empty()) return;
 
-    // Clear the D3D render target (background color)
-    const float darkTerminalBackground[] = { 0.02f, 0.02f, 0.08f, 1.0f }; // A very dark blue
-    m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), darkTerminalBackground);
+    D2D1_COLOR_F color = GetD2DColor(winrt::win_retro_term::Core::AnsiColor::Background, false);
+    const float clearColor[4] = { color.r, color.g, color.b, color.a };
+    m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
 
     m_d2dContext->BeginDraw();
     m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
 
-    if (m_textBrush && m_textFormat) {
-        const auto& screenData = m_terminalBufferPtr->GetScreenBuffer();
-        int rows = m_terminalBufferPtr->GetRows();
-        int cols = m_terminalBufferPtr->GetCols();
+    const auto& screenData = m_terminalBufferPtr->GetScreenBuffer();
+    int rows = m_terminalBufferPtr->GetRows();
+    int cols = m_terminalBufferPtr->GetCols();
 
-        float yPos = 5.0f; // Starting Y offset (in DIPs)
-        // float charWidth = m_avgCharWidth; // Use cached font metrics
-        float lineHeight = m_lineHeight;
+    float yPos = 5.0f; // Starting Y offset (DIPs)
+    float xOffset = 5.0f; // Starting X offset (DIPs)
+    float charWidth = GetFontCharWidth();  // From cached metrics
+    float lineHeight = GetFontCharHeight(); // From cached metrics
 
-        for (int r = 0; r < rows; ++r) {
-            std::wstring lineText;
-            lineText.reserve(cols);
-            if (r < screenData.size()) { // Ensure row exists
-                for (int c = 0; c < cols; ++c) {
-                    if (c < screenData[r].size()) { // Ensure col exists
-                        lineText += screenData[r][c].character;
-                    }
-                    else {
-                        lineText += L' '; // Pad if col doesn't exist (shouldn't happen with proper buffer init)
-                    }
+    for (int r = 0; r < rows; ++r) {
+        if (r >= screenData.size()) continue; // Should not happen
+
+        // Render runs of characters with the same attributes
+        int currentRunStartCol = 0;
+        winrt::win_retro_term::Core::Cell firstCellInRun = screenData[r][0];
+
+        for (int c = 0; c <= cols; ++c) { // Iterate one past last col to draw final run
+            bool endOfLine = (c == cols);
+            bool attributesChanged = false;
+            winrt::win_retro_term::Core::Cell currentCell;
+
+            if (!endOfLine) {
+                currentCell = screenData[r][c];
+                if (currentCell.foregroundColor != firstCellInRun.foregroundColor ||
+                    currentCell.backgroundColor != firstCellInRun.backgroundColor ||
+                    currentCell.attributes != firstCellInRun.attributes) {
+                    attributesChanged = true;
                 }
             }
-            else { // Pad if row doesn't exist (shouldn't happen)
-                lineText.assign(cols, L' ');
+
+            if (endOfLine || attributesChanged) {
+                // Draw the run from currentRunStartCol to c-1
+                int runLength = c - currentRunStartCol;
+                if (runLength > 0) {
+                    std::wstring runText;
+                    runText.reserve(runLength);
+                    for (int i = 0; i < runLength; ++i) {
+                        runText += screenData[r][currentRunStartCol + i].character;
+                    }
+
+                    // Determine attributes for this run (from firstCellInRun)
+                    winrt::win_retro_term::Core::AnsiColor fg = firstCellInRun.foregroundColor;
+                    winrt::win_retro_term::Core::AnsiColor bg = firstCellInRun.backgroundColor;
+                    winrt::win_retro_term::Core::CellAttributesFlags cellAttrs = firstCellInRun.attributes;
+
+                    if ((cellAttrs & winrt::win_retro_term::Core::CellAttributesFlags::Inverse) != winrt::win_retro_term::Core::CellAttributesFlags::None) {
+                        std::swap(fg, bg);
+                    }
+
+                    // Background fill for the run
+                    ID2D1SolidColorBrush* bgBrush = m_colorBrushes[static_cast<uint8_t>(bg)].Get();
+                    D2D1_RECT_F bgRect = D2D1::RectF(
+                        xOffset + currentRunStartCol * charWidth,
+                        yPos,
+                        xOffset + c * charWidth, // Up to current column 'c'
+                        yPos + lineHeight);
+                    m_d2dContext->FillRectangle(&bgRect, bgBrush);
+
+                    // Select TextFormat (Normal/Bold)
+                    IDWriteTextFormat* currentTextFormat = m_textFormatNormal.Get();
+                    if ((cellAttrs & winrt::win_retro_term::Core::CellAttributesFlags::Bold) != winrt::win_retro_term::Core::CellAttributesFlags::None) {
+                        currentTextFormat = m_textFormatBold.Get();
+                        // If Faint is also set, some terminals might prefer faint or normal
+                        if ((cellAttrs & winrt::win_retro_term::Core::CellAttributesFlags::Dim) != winrt::win_retro_term::Core::CellAttributesFlags::None) {
+                            // currentTextFormat = m_textFormatNormal.Get(); // Example: Faint overrides Bold
+                        }
+                    }
+                    // TODO: Add Italic, BoldItalic if supported
+
+                    // Foreground text brush
+                    ID2D1SolidColorBrush* fgBrush = m_colorBrushes[static_cast<uint8_t>(fg)].Get();
+
+                    // Text layout rect for the run
+                    D2D1_RECT_F textLayoutRect = D2D1::RectF(
+                        xOffset + currentRunStartCol * charWidth,
+                        yPos,
+                        xOffset + (currentRunStartCol + runLength) * charWidth + charWidth, // Give a bit extra for last char
+                        yPos + lineHeight);
+
+                    if (!runText.empty() && fgBrush && currentTextFormat &&
+                        !((cellAttrs & winrt::win_retro_term::Core::CellAttributesFlags::Concealed) != winrt::win_retro_term::Core::CellAttributesFlags::None)) { // Don't draw concealed
+                        m_d2dContext->DrawText(
+                            runText.c_str(), (UINT32)runText.length(),
+                            currentTextFormat, &textLayoutRect, fgBrush,
+                            D2D1_DRAW_TEXT_OPTIONS_NONE // Or D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT if using color fonts
+                        );
+                    }
+                    // TODO: Draw underline, strikethrough as separate lines/rects if needed
+                }
+
+                // Start new run
+                if (!endOfLine) {
+                    currentRunStartCol = c;
+                    firstCellInRun = currentCell;
+                }
             }
-
-
-            // Trim trailing spaces for potentially better rendering performance with some layouts
-            // size_t lastChar = lineText.find_last_not_of(L' ');
-            // if (std::wstring::npos != lastChar) {
-            //     lineText.erase(lastChar + 1);
-            // } else {
-            //     lineText.clear(); // Line is all spaces
-            // }
-
-
-            if (!lineText.empty()) { // Only draw if there's something to draw
-                D2D1_RECT_F textLayoutRect = D2D1::RectF(
-                    5.0f,  // Left X offset (in DIPs)
-                    yPos,
-                    static_cast<float>(m_logicalSize.Width - 5.0f),
-                    yPos + lineHeight
-                );
-
-                m_d2dContext->DrawTextW(
-                    lineText.c_str(),
-                    static_cast<UINT32>(lineText.length()),
-                    m_textFormat.Get(),
-                    &textLayoutRect,
-                    m_textBrush.Get(),
-                    D2D1_DRAW_TEXT_OPTIONS_NONE // Use NO_CLIP if you want to see overflows
-                                                 // D2D1_DRAW_TEXT_OPTIONS_CLIP
-                );
-            }
-            yPos += lineHeight; // Move to next line position
         }
-
-        // TODO: Render cursor
-        int cursorR = m_terminalBufferPtr->GetCursorRow();
-        int cursorC = m_terminalBufferPtr->GetCursorCol();
-        float cursor_x_pos = 5.0f + cursorC * m_avgCharWidth;
-        float cursor_y_pos = 5.0f + cursorR * m_lineHeight;
-        // Draw a rectangle or block for the cursor
-        D2D1_RECT_F cursorRect = D2D1::RectF(cursor_x_pos, cursor_y_pos, cursor_x_pos + m_avgCharWidth, cursor_y_pos + m_lineHeight);
-        m_d2dContext->FillRectangle(&cursorRect, m_textBrush.Get()); // Example: solid cursor
+        yPos += lineHeight;
     }
+
+    // Render cursor
+    int cursorR = m_terminalBufferPtr->GetCursorRow();
+    int cursorC = m_terminalBufferPtr->GetCursorCol();
+    float cursor_x_pos = 5.0f + cursorC * m_avgCharWidth;
+    float cursor_y_pos = 5.0f + cursorR * m_lineHeight;
+
+    // Draw a rectangle or block for the cursor
+    D2D1_RECT_F cursorRect = D2D1::RectF(cursor_x_pos, cursor_y_pos, cursor_x_pos + m_avgCharWidth, cursor_y_pos + m_lineHeight);
+    m_d2dContext->FillRectangle(&cursorRect, m_defaultFgBrush.Get());
 
     HRESULT hr = m_d2dContext->EndDraw();
     if (hr == D2DERR_RECREATE_TARGET) {
@@ -539,7 +642,6 @@ void D3D11Renderer::ReleaseDeviceDependentResources() {
 
     if (m_d2dContext) m_d2dContext->SetTarget(nullptr);
     m_d2dTargetBitmap = nullptr;
-    m_textBrush = nullptr;
     m_textFormat = nullptr;
     m_d2dContext = nullptr;
     m_d2dDevice = nullptr;
@@ -550,4 +652,12 @@ void D3D11Renderer::ReleaseDeviceDependentResources() {
     m_d3dContext = nullptr;
     m_d3dDevice = nullptr; // This should be last for device-dependent resources
     m_isInitialized = false; // Mark as not initialized until re-created
+
+    m_colorBrushes.clear();
+    m_defaultFgBrush = nullptr;
+    m_defaultBgBrush = nullptr;
+
+    m_textFormatNormal = nullptr;
+    m_textFormatBold = nullptr;
+    m_textFormat = nullptr;
 }

@@ -108,6 +108,14 @@ namespace winrt::win_retro_term::Core
                 m_terminalActions.EraseInLine(GetParam(0, 0));
             }
             break;
+        case L'm': // SGR - Select Graphic Rendition
+            if (m_params.empty()) {
+                m_terminalActions.SetGraphicsRendition({ 0 });
+            }
+            else {
+                m_terminalActions.SetGraphicsRendition(m_params);
+            }
+            break;
         default:
             OutputDebugString((L"AnsiParser: Unhandled CSI final character: '" + std::wstring(1, finalChar) + L"' with intermediates '" + m_intermediates + L"'\n").c_str());
             break;

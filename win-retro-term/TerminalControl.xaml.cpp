@@ -39,7 +39,7 @@ namespace winrt::win_retro_term::implementation
 
         COORD ptyInitialSize = { static_cast<SHORT>(m_terminalBuffer->GetCols()), static_cast<SHORT>(m_terminalBuffer->GetRows()) };
 
-        if (m_ptyProcess->Start(L"cmd.exe", ptyInitialSize, ptyCallback)) {
+        if (m_ptyProcess->Start(L"pwsh.exe", ptyInitialSize, ptyCallback)) {
             OutputDebugStringA("TerminalControl: ConPTY started successfully.\n");
         }
         else {
