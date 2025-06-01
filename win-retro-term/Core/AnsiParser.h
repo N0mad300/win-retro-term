@@ -37,6 +37,7 @@ namespace winrt::win_retro_term::Core
         int GetParam(size_t index, int defaultValue) const;
 
         void DispatchCsi(wchar_t finalChar);
+        void DispatchEscapeSequence(wchar_t finalChar);
 
         ITerminalActions& m_terminalActions;
         ParserState m_currentState;

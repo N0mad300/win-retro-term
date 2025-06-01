@@ -61,6 +61,10 @@ namespace winrt::win_retro_term::Core
         Cell() = default;
     };
 
+    const wchar_t CHARSET_US_ASCII = L'B';
+    const wchar_t CHARSET_DEC_SPECIAL_GRAPHICS = L'0';
+    const wchar_t CHARSET_UK = L'A';
+
     class TerminalBuffer : public ITerminalActions {
     public:
         TerminalBuffer(int rows, int cols);
@@ -104,6 +108,9 @@ namespace winrt::win_retro_term::Core
         AnsiColor GetCurrentForegroundColor() const { return m_currentAttributes.foregroundColor; }
         AnsiColor GetCurrentBackgroundColor() const { return m_currentAttributes.backgroundColor; }
 
+        void DesignateCharSet(uint8_t targetSet, wchar_t charSetType) override;
+        void InvokeCharSet(uint8_t gSetToInvokeIntoGL) override;
+
     private:
         void EnsureCursorInBounds();
         void InitBuffer();
@@ -117,5 +124,12 @@ namespace winrt::win_retro_term::Core
 
         Cell m_currentAttributes;
         Cell m_defaultAttributes;
+
+        // Character set handling
+        wchar_t m_charsets[4];
+        uint8_t m_glCharsetIndex;
+        uint8_t m_grCharsetIndex;
+
+        wchar_t MapCharacter(wchar_t ch);
     };
 }

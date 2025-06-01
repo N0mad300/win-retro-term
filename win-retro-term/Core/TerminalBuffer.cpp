@@ -4,12 +4,53 @@
 
 namespace winrt::win_retro_term::Core 
 {
+    const std::map<wchar_t, wchar_t> decSpecialGraphicsMap = {
+        {L'`', L'\u25C6'}, // Diamond
+        {L'a', L'\u2592'}, // Checker board (stipple)
+        {L'b', L'\u2409'}, // HT symbol
+        {L'c', L'\u240C'}, // FF symbol
+        {L'd', L'\u240D'}, // CR symbol
+        {L'e', L'\u240A'}, // LF symbol
+        {L'f', L'\u00B0'}, // Degree Symbol
+        {L'g', L'\u00B1'}, // Plus/Minus Symbol
+        {L'h', L'\u2424'}, // NL symbol
+        {L'i', L'\u240B'}, // VT symbol
+        {L'j', L'\u2518'}, // Lower Right Corner
+        {L'k', L'\u2510'}, // Upper Right Corner
+        {L'l', L'\u250C'}, // Upper Left Corner
+        {L'm', L'\u2514'}, // Lower Left Corner
+        {L'n', L'\u253C'}, // Crossing Lines (plus)
+        {L'o', L'\u23BA'}, // Scan Line 1 (horizontal line - top)
+        {L'p', L'\u23BB'}, // Scan Line 3
+        {L'q', L'\u2500'}, // Scan Line 5 (horizontal line - middle)
+        {L'r', L'\u23BC'}, // Scan Line 7
+        {L's', L'\u23BD'}, // Scan Line 9 (horizontal line - bottom)
+        {L't', L'\u251C'}, // Left Tee
+        {L'u', L'\u2524'}, // Right Tee
+        {L'v', L'\u2534'}, // Bottom Tee
+        {L'w', L'\u252C'}, // Top Tee
+        {L'x', L'\u2502'}, // Vertical Line
+        {L'y', L'\u2264'}, // Less Than Or Equal To
+        {L'z', L'\u2265'}, // Greater Than Or Equal To
+        {L'{', L'\u03C0'}, // Pi
+        {L'|', L'\u2260'}, // Not Equal To
+        {L'}', L'\u00A3'}, // UK Pound Sterling
+        {L'~', L'\u00B7'}  // Centered Dot (bullet)
+    };
+
     TerminalBuffer::TerminalBuffer(int rows, int cols) : m_rows(rows), m_cols(cols), m_cursorX(0), m_cursorY(0)
     {
         m_defaultAttributes.foregroundColor = AnsiColor::Foreground;
         m_defaultAttributes.backgroundColor = AnsiColor::Background;
         m_defaultAttributes.attributes = CellAttributesFlags::None;
         m_currentAttributes = m_defaultAttributes;
+
+        m_charsets[0] = CHARSET_US_ASCII;
+        m_charsets[1] = CHARSET_US_ASCII;
+        m_charsets[2] = CHARSET_US_ASCII;
+        m_charsets[3] = CHARSET_US_ASCII;
+        m_glCharsetIndex = 0;
+        m_grCharsetIndex = 1;
 
         InitBuffer();
     }
@@ -126,8 +167,10 @@ namespace winrt::win_retro_term::Core
             LineFeed();
         }
 
+        wchar_t mappedChar = MapCharacter(ch);
+
         if (m_cursorY < m_rows && m_cursorX < m_cols) {
-            m_screenBuffer[m_cursorY][m_cursorX].character = ch;
+            m_screenBuffer[m_cursorY][m_cursorX].character = mappedChar;
             m_screenBuffer[m_cursorY][m_cursorX].foregroundColor = m_currentAttributes.foregroundColor;
             m_screenBuffer[m_cursorY][m_cursorX].backgroundColor = m_currentAttributes.backgroundColor;
             m_screenBuffer[m_cursorY][m_cursorX].attributes = m_currentAttributes.attributes;
@@ -135,8 +178,59 @@ namespace winrt::win_retro_term::Core
         }
     }
 
+    wchar_t TerminalBuffer::MapCharacter(wchar_t ch) 
+    {
+        if (ch < 0x20 || ch == 0x7F) {
+            return ch;
+        }
+
+        wchar_t activeCharset = m_charsets[m_glCharsetIndex];
+
+        if (activeCharset == CHARSET_DEC_SPECIAL_GRAPHICS) {
+            if (ch == L'_') return L' ';
+
+            auto it = decSpecialGraphicsMap.find(ch);
+            if (it != decSpecialGraphicsMap.end()) {
+                return it->second;
+            }
+            return ch;
+        }
+        else if (activeCharset == CHARSET_UK) {
+            if (ch == L'#') return L'\u00A3';
+            return ch;
+        }
+
+        return ch;
+    }
+
+
+    void TerminalBuffer::DesignateCharSet(uint8_t targetSet, wchar_t charSetType) {
+        if (targetSet > 3) return;
+
+        m_charsets[targetSet] = charSetType;
+
+        OutputDebugString((L"TerminalBuffer: Designated G" + std::to_wstring(targetSet) + L" as type '" + std::wstring(1, charSetType) + L"'\n").c_str());
+    }
+
+
+    void TerminalBuffer::InvokeCharSet(uint8_t gSetToInvokeIntoGL) {
+        if (gSetToInvokeIntoGL > 3) return;
+
+        m_glCharsetIndex = gSetToInvokeIntoGL;
+        OutputDebugString((L"TerminalBuffer: Invoked G" + std::to_wstring(gSetToInvokeIntoGL) + L" (type '" + std::wstring(1,m_charsets[gSetToInvokeIntoGL]) + L"') into GL\n").c_str());
+    }
+
     void TerminalBuffer::ExecuteControlFunction(wchar_t control) 
     {
+        if (control == 0x0E) { // SO - Shift Out, invoke G1 into GL
+            InvokeCharSet(1);
+        }
+        else if (control == 0x0F) { // SI - Shift In, invoke G0 into GL
+            InvokeCharSet(0);
+        }
+        else {
+            OutputDebugString((L"TerminalBuffer: Unhandled ExecuteControlFunction: 0x" + std::to_wstring(static_cast<int>(control)) + L"\n").c_str());
+        }
     }
 
     void TerminalBuffer::LineFeed() { // LF, \n

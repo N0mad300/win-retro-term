@@ -122,6 +122,44 @@ namespace winrt::win_retro_term::Core
         }
     }
 
+    void AnsiParser::DispatchEscapeSequence(wchar_t finalChar) {
+        OutputDebugString((L"AnsiParser: ESC Dispatch - Intermediates: '" + m_intermediates + L"' Final: '" + std::wstring(1, finalChar) + L"'\n").c_str());
+
+        if (m_intermediates.length() == 1) {
+            wchar_t intermediate = m_intermediates[0];
+            uint8_t targetSet = 0xFF;
+
+            switch (intermediate) {
+            case L'(': targetSet = 0; break; // G0
+            case L')': targetSet = 1; break; // G1
+            case L'-': targetSet = 1; break; // G1 (VT300)
+            case L'*': targetSet = 2; break; // G2
+            case L'.': targetSet = 2; break; // G2 (VT300)
+            case L'+': targetSet = 3; break; // G3
+            case L'/': targetSet = 3; break; // G3 (VT300)
+            default:
+                // Unknown intermediate for SCS
+                break;
+            }
+
+            if (targetSet != 0xFF) {
+                m_terminalActions.DesignateCharSet(targetSet, finalChar);
+                return;
+            }
+        }
+
+        if (m_intermediates.empty()) {
+            switch (finalChar) {
+            case L'D': m_terminalActions.LineFeed(); break; // IND - Index (move down one line)
+            case L'E': m_terminalActions.CarriageReturn(); m_terminalActions.LineFeed(); break; // NEL - Next Line
+            case L'M': break; // RI - Reverse Index (move up one line, scroll if at top)
+            default:
+                OutputDebugString((L"AnsiParser: Unhandled simple ESC sequence: ESC " + std::wstring(1, finalChar) + L"\n").c_str());
+                break;
+            }
+        }
+    }
+
     void AnsiParser::Parse(const char* data, size_t length)
     {
         if (length == 0) return;
@@ -233,6 +271,11 @@ namespace winrt::win_retro_term::Core
             {
                 m_currentState = ParserState::CSI_ENTRY;
             }
+            else if ((ch >= L'(' && ch <= L'+') || (ch >= L'-' && ch <= L'/')) // SCS Intermediate characters (for G0, G1, G2, G3 designation)
+            {
+                CollectIntermediate(ch);
+                m_currentState = ParserState::ESCAPE_INTERMEDIATE;
+            }
             else if (ch == L'P') // DCS
             {
                 m_currentState = ParserState::DCS_ENTRY;
@@ -241,13 +284,44 @@ namespace winrt::win_retro_term::Core
             {
                 m_currentState = ParserState::OSC_STRING;
             }
+            else if (ch == L'X')
+            {
+                m_currentState = ParserState::OSC_STRING;
+            }
+            else if (ch == L'^')
+            {
+                m_currentState = ParserState::OSC_STRING;
+            }
+            else if (ch == L'_')
+            {
+                m_currentState = ParserState::OSC_STRING;
+            }
             else if (ch >= 0x28 && ch <= 0x2F)
             {
                 CollectIntermediate(ch);
                 m_currentState = ParserState::ESCAPE_INTERMEDIATE;
             }
+            else if (ch >= 0x40 && ch <= 0x5F) 
+            {
+                DispatchEscapeSequence(ch);
+                m_currentState = ParserState::GROUND;
+            }
             else
             {
+                m_currentState = ParserState::GROUND;
+            }
+            break;
+
+        case ParserState::ESCAPE_INTERMEDIATE:
+            if (ch >= 0x20 && ch <= 0x7E) {
+                DispatchEscapeSequence(ch);
+                m_currentState = ParserState::GROUND;
+            }
+            else if (ch == 0x1B) { // ESC (Abort)
+                m_currentState = ParserState::GROUND;
+            }
+            else {
+                // Unexpected character
                 m_currentState = ParserState::GROUND;
             }
             break;

@@ -30,6 +30,9 @@ namespace winrt::win_retro_term::Core
         virtual void EraseInLine(int mode) = 0;         // EL:  CSI Ps K
 
         virtual void SetGraphicsRendition(const std::vector<int>& params) = 0; // SGR
+
+        virtual void DesignateCharSet(uint8_t targetSet, wchar_t charSet) = 0;
+        virtual void InvokeCharSet(uint8_t gSetToInvokeIntoGL) = 0;
     };
 
 }
