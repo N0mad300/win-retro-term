@@ -252,7 +252,6 @@ namespace winrt::win_retro_term::Core
         }
         else if (m_cursorY > 0) {
             m_cursorY--;
-            m_cursorX = m_cols -1;
             m_screenBuffer[m_cursorY][m_cursorX].character = L' ';
         }
     }

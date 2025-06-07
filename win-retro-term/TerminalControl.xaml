@@ -8,7 +8,14 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid>
-        <SwapChainPanel x:Name="dxSwapChainPanel" />
+    <Grid x:Name="RootGrid"
+          IsTabStop="True"
+          AllowFocusOnInteraction="True"
+          KeyDown="RootGrid_OnKeyDown"
+          GotFocus="RootGrid_OnGotFocus"
+          LostFocus="RootGrid_OnLostFocus"
+          PointerPressed="RootGrid_OnPointerPressed"
+          CharacterReceived="RootGrid_OnCharacterReceived">
+        <SwapChainPanel x:Name="dxSwapChainPanel"/>
     </Grid>
 </UserControl>

@@ -23,10 +23,18 @@ namespace winrt::win_retro_term::implementation
         void OnCompositionScaleChanged(winrt::Microsoft::UI::Xaml::Controls::SwapChainPanel const& sender, winrt::Windows::Foundation::IInspectable const& args);
         void OnRendering(winrt::Windows::Foundation::IInspectable const& sender, winrt::Windows::Foundation::IInspectable const& args);
 
+        void RootGrid_OnGotFocus(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void RootGrid_OnLostFocus(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void RootGrid_OnPointerPressed(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
+
+        void RootGrid_OnKeyDown(winrt::Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
+        void RootGrid_OnCharacterReceived(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::CharacterReceivedRoutedEventArgs const& args);
+
     private:
         void InitializePtyAndBuffer();
         void PtyDataReceived(const char* buffer, size_t length);
         void UpdateTerminalSize();
+        void SendInputToPty(const std::string& utf8Input);
 
         std::unique_ptr<D3D11Renderer> m_renderer;
         std::unique_ptr<ConPtyProcess> m_ptyProcess;
@@ -38,6 +46,8 @@ namespace winrt::win_retro_term::implementation
 
         float m_charWidthApprox = 8.0f;
         float m_charHeightApprox = 16.0f;
+
+        bool m_isFocused = false; // For cursor rendering later
     };
 }
 

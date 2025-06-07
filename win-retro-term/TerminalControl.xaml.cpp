@@ -5,15 +5,23 @@
 #endif
 
 #include <winrt/Microsoft.UI.Xaml.Input.h>
+#include <winrt/Windows.UI.Core.h>
+
 #include <string>
 
 using namespace winrt;
+using namespace winrt::Windows::System;
+using namespace winrt::Windows::UI::Core;
 using namespace winrt::Microsoft::UI::Xaml;
+using namespace winrt::Microsoft::UI::Xaml::Input;
 
 namespace winrt::win_retro_term::implementation
 {
     TerminalControl::TerminalControl()
     {
+        InitializeComponent();
+        RootGrid().IsTabStop(true);
+
         m_dispatcherQueue = winrt::Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread();
 
         m_terminalBuffer = std::make_unique<Core::TerminalBuffer>(25, 80);
@@ -39,7 +47,7 @@ namespace winrt::win_retro_term::implementation
 
         COORD ptyInitialSize = { static_cast<SHORT>(m_terminalBuffer->GetCols()), static_cast<SHORT>(m_terminalBuffer->GetRows()) };
 
-        if (m_ptyProcess->Start(L"pwsh.exe", ptyInitialSize, ptyCallback)) {
+        if (m_ptyProcess->Start(L"cmd.exe", ptyInitialSize, ptyCallback)) {
             OutputDebugStringA("TerminalControl: ConPTY started successfully.\n");
         }
         else {
@@ -63,6 +71,8 @@ namespace winrt::win_retro_term::implementation
 
         dxSwapChainPanel().SizeChanged({ this, &TerminalControl::OnSizeChanged });
         dxSwapChainPanel().CompositionScaleChanged({ this, &TerminalControl::OnCompositionScaleChanged });
+
+        RootGrid().Focus(FocusState::Programmatic);
 
         m_renderingEventToken = winrt::Microsoft::UI::Xaml::Media::CompositionTarget::Rendering({ this, &TerminalControl::OnRendering });
     }
@@ -144,6 +154,84 @@ namespace winrt::win_retro_term::implementation
         {
             m_renderer->Render();
             m_renderer->Present();
+        }
+    }
+
+    void TerminalControl::SendInputToPty(const std::string& utf8Input) {
+        if (m_ptyProcess && m_ptyProcess->IsRunning() && !utf8Input.empty()) {
+            m_ptyProcess->WriteInput(utf8Input);
+        }
+    }
+
+    void TerminalControl::RootGrid_OnGotFocus(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args) {
+        m_isFocused = true;
+        OutputDebugStringA("TerminalControl got focus.\n");
+        // TODO: Update cursor appearance (e.g : start blinking)
+    }
+
+    void TerminalControl::RootGrid_OnLostFocus(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args) {
+        m_isFocused = false;
+        OutputDebugStringA("TerminalControl lost focus.\n");
+        // TODO: Update cursor appearance (e.g : stop blinking)
+    }
+
+    void TerminalControl::RootGrid_OnPointerPressed(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args) {
+        RootGrid().Focus(winrt::Microsoft::UI::Xaml::FocusState::Pointer);
+        args.Handled(true);
+    }
+
+    void TerminalControl::RootGrid_OnKeyDown(winrt::Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args)
+    {
+        if (!m_isFocused) {
+            return;
+        }
+
+        std::string inputSequence;
+        bool handled = true;
+
+        switch (args.Key()) {
+        case winrt::Windows::System::VirtualKey::Enter:
+            inputSequence = "\r";
+            break;
+
+        case winrt::Windows::System::VirtualKey::Back:
+            inputSequence = "\x7F";
+            break;
+        default:
+            handled = false;
+            break;
+        }
+
+        if (!inputSequence.empty()) {
+            SendInputToPty(inputSequence);
+        }
+
+        if (handled) {
+            args.Handled(true);
+        }
+    }
+
+    void TerminalControl::RootGrid_OnCharacterReceived(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::CharacterReceivedRoutedEventArgs const& args) {
+        if (!m_isFocused) {
+            return;
+        }
+
+        wchar_t ch = args.Character();
+
+        if ((ch < 0x20 && ch != L'\t' && ch != L'\n' && ch != L'\r') || ch == 0x7F) {
+            return;
+        }
+
+        char utf8Buffer[5] = { 0 };
+        int bytesWritten = WideCharToMultiByte(
+            CP_UTF8, 0, &ch, 1, utf8Buffer, sizeof(utf8Buffer) - 1, nullptr, nullptr);
+
+        if (bytesWritten > 0) {
+            SendInputToPty(std::string(utf8Buffer, bytesWritten));
+            args.Handled(true);
+        }
+        else {
+            args.Handled(false);
         }
     }
 }
