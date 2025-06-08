@@ -116,6 +116,30 @@ namespace winrt::win_retro_term::Core
                 m_terminalActions.SetGraphicsRendition(m_params);
             }
             break;
+        case L'h': // DECSET - DEC Private Mode Set
+            if (m_intermediates == L"?") {
+                for (size_t i = 0; i < m_params.size(); ++i) {
+                    int mode = GetParam(i, -1);
+                    if (mode != -1) {
+                        m_terminalActions.SetDecPrivateMode(mode, true);
+                    }
+                }
+            }
+            break;
+        case L'l': // DECRST - DEC Private Mode Reset
+            if (m_intermediates == L"?") 
+            {
+                for (size_t i = 0; i < m_params.size(); ++i) 
+                {
+                    int mode = GetParam(i, -1);
+                    if (mode != -1) 
+                    {
+                        m_terminalActions.SetDecPrivateMode(mode, false);
+                    }
+                }
+            }
+            break;
+
         default:
             OutputDebugString((L"AnsiParser: Unhandled CSI final character: '" + std::wstring(1, finalChar) + L"' with intermediates '" + m_intermediates + L"'\n").c_str());
             break;
@@ -150,9 +174,11 @@ namespace winrt::win_retro_term::Core
 
         if (m_intermediates.empty()) {
             switch (finalChar) {
-            case L'D': m_terminalActions.LineFeed(); break; // IND - Index (move down one line)
+            case L'D': m_terminalActions.LineFeed(); break;                                     // IND - Index (move down one line)
             case L'E': m_terminalActions.CarriageReturn(); m_terminalActions.LineFeed(); break; // NEL - Next Line
-            case L'M': break; // RI - Reverse Index (move up one line, scroll if at top)
+            case L'M': break;                                                                   // RI - Reverse Index (move up one line, scroll if at top)
+            case L'=': m_terminalActions.SetDecPrivateMode(66, true); break;                    // DECKPAM - Keypad Application Mode
+            case L'>': m_terminalActions.SetDecPrivateMode(66, false); break;                   // DECKPNM - Keypad Numeric Mode
             default:
                 OutputDebugString((L"AnsiParser: Unhandled simple ESC sequence: ESC " + std::wstring(1, finalChar) + L"\n").c_str());
                 break;

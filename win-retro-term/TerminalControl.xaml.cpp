@@ -4,6 +4,7 @@
 #include "TerminalControl.g.cpp"
 #endif
 
+#include <winrt/Microsoft.UI.Input.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Windows.UI.Core.h>
 
@@ -189,14 +190,137 @@ namespace winrt::win_retro_term::implementation
         std::string inputSequence;
         bool handled = true;
 
+        bool altDown = (winrt::Microsoft::UI::Input::InputKeyboardSource::GetKeyStateForCurrentThread(VirtualKey::Menu) & 
+            winrt::Windows::UI::Core::CoreVirtualKeyStates::Down) == winrt::Windows::UI::Core::CoreVirtualKeyStates::Down;
+        bool ctrlDown = (winrt::Microsoft::UI::Input::InputKeyboardSource::GetKeyStateForCurrentThread(VirtualKey::Control) &
+            winrt::Windows::UI::Core::CoreVirtualKeyStates::Down) == winrt::Windows::UI::Core::CoreVirtualKeyStates::Down;
+        bool shiftDown = (winrt::Microsoft::UI::Input::InputKeyboardSource::GetKeyStateForCurrentThread(VirtualKey::Shift) &
+            winrt::Windows::UI::Core::CoreVirtualKeyStates::Down) == winrt::Windows::UI::Core::CoreVirtualKeyStates::Down;
+
+        bool appCursorMode = m_terminalBuffer ? m_terminalBuffer->IsApplicationCursorKeysMode() : false;
+        bool appKeypadMode = m_terminalBuffer ? m_terminalBuffer->IsApplicationKeypadMode() : false;
+
+        if (ctrlDown) {
+            winrt::Windows::System::VirtualKey key = args.Key();
+            if (key >= winrt::Windows::System::VirtualKey::A && key <= winrt::Windows::System::VirtualKey::Z) {
+                char ctrlChar = static_cast<char>(
+                    static_cast<int>(key) - static_cast<int>(winrt::Windows::System::VirtualKey::A) + 1
+                    );
+                inputSequence += ctrlChar;
+            }
+            else {
+                handled = false;
+            }
+        }
+
         switch (args.Key()) {
         case winrt::Windows::System::VirtualKey::Enter:
-            inputSequence = "\r";
+            if (args.OriginalKey() == (winrt::Windows::System::VirtualKey)0x0C && appKeypadMode) {
+                inputSequence = "\x1BOM";
+            }
+            else {
+                inputSequence = "\r";
+            }
             break;
-
         case winrt::Windows::System::VirtualKey::Back:
             inputSequence = "\x7F";
             break;
+        case winrt::Windows::System::VirtualKey::Tab:
+            inputSequence = "\t";
+            break;
+        case winrt::Windows::System::VirtualKey::Escape:
+            inputSequence = "\x1B";
+            break;
+
+        case winrt::Windows::System::VirtualKey::Up:
+            inputSequence = appCursorMode ? "\x1BOA" : (ctrlDown ? "\x1B[1;5A" : (shiftDown ? "\x1B[1;2A" : "\x1B[A"));
+            break;
+        case winrt::Windows::System::VirtualKey::Down:
+            inputSequence = appCursorMode ? "\x1BOB" : (ctrlDown ? "\x1B[1;5B" : (shiftDown ? "\x1B[1;2B" : "\x1B[B"));
+            break;
+        case winrt::Windows::System::VirtualKey::Right:
+            inputSequence = appCursorMode ? "\x1BOC" : (ctrlDown ? "\x1B[1;5C" : (shiftDown ? "\x1B[1;2C" : "\x1B[C"));
+            break;
+        case winrt::Windows::System::VirtualKey::Left:
+            inputSequence = appCursorMode ? "\x1BOD" : (ctrlDown ? "\x1B[1;5D" : (shiftDown ? "\x1B[1;2D" : "\x1B[D"));
+            break;
+
+        case winrt::Windows::System::VirtualKey::Home:
+            inputSequence = ctrlDown ? "\x1B[1;5H" : (appCursorMode ? "\x1BOH" : "\x1B[H");
+            break;
+        case winrt::Windows::System::VirtualKey::End:
+            inputSequence = ctrlDown ? "\x1B[1;5F" : (appCursorMode ? "\x1BOF" : "\x1B[4~");
+            break;
+        case winrt::Windows::System::VirtualKey::PageUp:
+            inputSequence = ctrlDown ? "\x1B[5;5~" : "\x1B[5~";
+            break;
+        case winrt::Windows::System::VirtualKey::PageDown:
+            inputSequence = ctrlDown ? "\x1B[6;5~" : "\x1B[6~";
+            break;
+        case winrt::Windows::System::VirtualKey::Delete:
+            inputSequence = ctrlDown ? "\x1B[3;5~" : "\x1B[3~";
+            break;
+        case winrt::Windows::System::VirtualKey::Insert:
+            inputSequence = ctrlDown ? "\x1B[2;5~" : (shiftDown ? "\x1B[2;2~" : "\x1B[2~");
+            break;
+
+        case winrt::Windows::System::VirtualKey::F1:
+            inputSequence = shiftDown ? "\x1B[1;2P" : (ctrlDown ? "\x1B[1;5P" : "\x1BOP"); break;
+        case winrt::Windows::System::VirtualKey::F2:    
+            inputSequence = shiftDown ? "\x1B[1;2Q" : (ctrlDown ? "\x1B[1;5Q" : "\x1BOQ"); break;
+        case winrt::Windows::System::VirtualKey::F3:    
+            inputSequence = shiftDown ? "\x1B[1;2R" : (ctrlDown ? "\x1B[1;5R" : "\x1BOR"); break;
+        case winrt::Windows::System::VirtualKey::F4:    
+            inputSequence = shiftDown ? "\x1B[1;2S" : (ctrlDown ? "\x1B[1;5S" : "\x1BOS"); break;
+        case winrt::Windows::System::VirtualKey::F5:    
+            inputSequence = shiftDown ? "\x1B[15;2~" : (ctrlDown ? "\x1B[15;5~" : "\x1B[15~"); break;
+        case winrt::Windows::System::VirtualKey::F6:    
+            inputSequence = shiftDown ? "\x1B[17;2~" : (ctrlDown ? "\x1B[17;5~" : "\x1B[17~"); break;
+        case winrt::Windows::System::VirtualKey::F7:    
+            inputSequence = shiftDown ? "\x1B[18;2~" : (ctrlDown ? "\x1B[18;5~" : "\x1B[18~"); break;
+        case winrt::Windows::System::VirtualKey::F8:    
+            inputSequence = shiftDown ? "\x1B[19;2~" : (ctrlDown ? "\x1B[19;5~" : "\x1B[19~"); break;
+        case winrt::Windows::System::VirtualKey::F9:    
+            inputSequence = shiftDown ? "\x1B[20;2~" : (ctrlDown ? "\x1B[20;5~" : "\x1B[20~"); break;
+        case winrt::Windows::System::VirtualKey::F10:   
+            inputSequence = shiftDown ? "\x1B[21;2~" : (ctrlDown ? "\x1B[21;5~" : "\x1B[21~"); break;
+        case winrt::Windows::System::VirtualKey::F11:   
+            inputSequence = shiftDown ? "\x1B[23;2~" : (ctrlDown ? "\x1B[23;5~" : "\x1B[23~"); break;
+        case winrt::Windows::System::VirtualKey::F12:   
+            inputSequence = shiftDown ? "\x1B[24;2~" : (ctrlDown ? "\x1B[24;5~" : "\x1B[24~"); break;
+
+        case winrt::Windows::System::VirtualKey::NumberPad0: 
+            inputSequence = appKeypadMode ? "\x1BOp" : "0"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad1: 
+            inputSequence = appKeypadMode ? "\x1BOq" : "1"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad2: 
+            inputSequence = appKeypadMode ? "\x1BOr" : "2"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad3: 
+            inputSequence = appKeypadMode ? "\x1BOs" : "3"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad4: 
+            inputSequence = appKeypadMode ? "\x1BOt" : "4"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad5: 
+            inputSequence = appKeypadMode ? "\x1BOu" : "5"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad6: 
+            inputSequence = appKeypadMode ? "\x1BOv" : "6"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad7: 
+            inputSequence = appKeypadMode ? "\x1BOw" : "7"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad8: 
+            inputSequence = appKeypadMode ? "\x1BOx" : "8"; break;
+        case winrt::Windows::System::VirtualKey::NumberPad9: 
+            inputSequence = appKeypadMode ? "\x1BOy" : "9"; break;
+
+        case winrt::Windows::System::VirtualKey::Decimal:    
+            inputSequence = appKeypadMode ? "\x1BOn" : "."; break;
+        case winrt::Windows::System::VirtualKey::Add:        
+            inputSequence = appKeypadMode ? "\x1BOk" : "+"; break;
+        case winrt::Windows::System::VirtualKey::Subtract:   
+            inputSequence = appKeypadMode ? "\x1BOj" : "-"; break;
+        case winrt::Windows::System::VirtualKey::Multiply:   
+            inputSequence = appKeypadMode ? "\x1BOm" : "*"; break;
+        case winrt::Windows::System::VirtualKey::Divide:     
+            inputSequence = appKeypadMode ? "\x1BOo" : "/"; break;
+
         default:
             handled = false;
             break;

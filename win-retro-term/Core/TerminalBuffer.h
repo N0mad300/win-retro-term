@@ -39,6 +39,26 @@ namespace winrt::win_retro_term::Core
         Dim = 1 << 6
     };
 
+    namespace DecPrivateModes {
+        const int DECCKM_CursorKeys = 1;                // Application Cursor Keys Mode
+        const int DECANM_AnsiVt52Mode = 2;              // ANSI/VT52 mode (VT52 is rare now)
+        const int DECCOLM_132ColumnMode = 3;            // 132 Column Mode
+        const int DECSCLM_SmoothScroll = 4;             // Smooth Scroll Mode
+        const int DECSCNM_ScreenMode = 5;               // Reverse Video Screen Mode
+        const int DECOM_OriginMode = 6;                 // Origin Mode (relative vs. absolute cursor addressing)
+        const int DECAWM_AutoWrapMode = 7;              // Auto Wrap Mode
+        const int DECARM_AutoRepeatMode = 8;            // Auto Repeat Keys Mode
+        const int XTERM_SendMouseXYOnClick = 9;         // X10 Mouse Reporting (Press/Release only)
+        const int DECTCEM_TextCursorEnable = 25;        // Show/Hide Cursor
+        const int DECNKM_KeypadApplication = 66;        // Application Keypad Mode (xterm)
+        const int XTERM_AlternateScreenBuffer = 1049;   // Uses alternate screen, saves/restores cursor & screen
+        const int XTERM_MouseBtnEvent = 1000;           // Send Mouse X & Y on button press and release.
+        const int XTERM_MouseMotionEvent = 1002;        // Send Mouse X & Y on button press, release, and motion.
+        const int XTERM_MouseAnyEvent = 1003;           // Send Mouse X & Y on any mouse event (press, release, motion).
+        const int XTERM_FocusEvent = 1004;              // Send FocusIn/FocusOut events.
+        const int XTERM_SGRMouseMode = 1006;            // Extended SGR mouse reporting.
+    }
+
     inline CellAttributesFlags operator|(CellAttributesFlags a, CellAttributesFlags b) {
         return static_cast<CellAttributesFlags>(static_cast<uint16_t>(a) | static_cast<uint16_t>(b));
     }
@@ -111,6 +131,13 @@ namespace winrt::win_retro_term::Core
         void DesignateCharSet(uint8_t targetSet, wchar_t charSetType) override;
         void InvokeCharSet(uint8_t gSetToInvokeIntoGL) override;
 
+        void SetDecPrivateMode(int mode, bool enabled) override;
+
+        bool IsApplicationCursorKeysMode() const { return m_applicationCursorKeysMode; }
+        bool IsApplicationKeypadMode() const { return m_applicationKeypadMode; }
+        bool IsCursorVisible() const { return m_cursorVisible; }
+        bool IsAlternateScreenActive() const { return m_isAlternateScreenActive; }
+
     private:
         void EnsureCursorInBounds();
         void InitBuffer();
@@ -125,10 +152,22 @@ namespace winrt::win_retro_term::Core
         Cell m_currentAttributes;
         Cell m_defaultAttributes;
 
-        // Character set handling
         wchar_t m_charsets[4];
         uint8_t m_glCharsetIndex;
         uint8_t m_grCharsetIndex;
+
+        bool m_applicationCursorKeysMode = false;
+        bool m_applicationKeypadMode = false;
+
+        bool m_cursorVisible = true;
+        bool m_autoWrapMode = true;
+        bool m_originMode = false;
+
+        bool m_isAlternateScreenActive = false;
+        std::vector<std::vector<Cell>> m_mainScreenBufferBackup;
+        Cell m_mainScreenCursorAttributesBackup;
+        int m_mainScreenCursorXBackup = 0;
+        int m_mainScreenCursorYBackup = 0;
 
         wchar_t MapCharacter(wchar_t ch);
     };

@@ -33,6 +33,8 @@ namespace winrt::win_retro_term::Core
 
         virtual void DesignateCharSet(uint8_t targetSet, wchar_t charSet) = 0;
         virtual void InvokeCharSet(uint8_t gSetToInvokeIntoGL) = 0;
+
+        virtual void SetDecPrivateMode(int mode, bool enabled) = 0;
     };
 
 }

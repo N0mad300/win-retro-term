@@ -163,8 +163,15 @@ namespace winrt::win_retro_term::Core
             ScrollUp();
         }
         if (m_cursorX >= m_cols) {
-            CarriageReturn();
-            LineFeed();
+            if (m_autoWrapMode)
+            {
+                CarriageReturn();
+                LineFeed();
+            }
+            else
+            {
+                m_cursorX = m_cols - 1;
+            }
         }
 
         wchar_t mappedChar = MapCharacter(ch);
@@ -174,7 +181,18 @@ namespace winrt::win_retro_term::Core
             m_screenBuffer[m_cursorY][m_cursorX].foregroundColor = m_currentAttributes.foregroundColor;
             m_screenBuffer[m_cursorY][m_cursorX].backgroundColor = m_currentAttributes.backgroundColor;
             m_screenBuffer[m_cursorY][m_cursorX].attributes = m_currentAttributes.attributes;
-            m_cursorX++;
+            
+            if (m_cursorX < m_cols - 1) 
+            {
+                m_cursorX++;
+            }
+            else 
+            {
+                if (m_autoWrapMode) 
+                {
+                    m_cursorX++;
+                }
+            }
         }
     }
 
@@ -467,6 +485,63 @@ namespace winrt::win_retro_term::Core
                     i += 2;
                 }
             }
+        }
+    }
+
+    void TerminalBuffer::SetDecPrivateMode(int mode, bool enabled) {
+        OutputDebugString((L"TerminalBuffer: SetDecPrivateMode - Mode: " + std::to_wstring(mode) + L" Enabled: " + (enabled ? L"true" : L"false") + L"\n").c_str());
+
+        switch (mode) {
+        case DecPrivateModes::DECCKM_CursorKeys: // Mode 1: Application Cursor Keys
+            m_applicationCursorKeysMode = enabled;
+            break;
+        case DecPrivateModes::DECNKM_KeypadApplication: // Mode 66: Application Keypad (xterm)
+            m_applicationKeypadMode = enabled;
+            break;
+        case DecPrivateModes::DECTCEM_TextCursorEnable: // Mode 25: Show/Hide Cursor
+            m_cursorVisible = enabled;
+            break;
+        case DecPrivateModes::DECAWM_AutoWrapMode: // Mode 7: Auto Wrap
+            m_autoWrapMode = enabled;
+            break;
+        case DecPrivateModes::DECOM_OriginMode: // Mode 6: Origin Mode
+            m_originMode = enabled;
+            if (enabled) {
+                SetCursorPosition(1, 1);
+            }
+            break;
+
+        case DecPrivateModes::XTERM_AlternateScreenBuffer: // Mode 1049
+            if (enabled) {
+                if (!m_isAlternateScreenActive) {
+                    // Save current screen, cursor pos, attributes
+                    m_mainScreenBufferBackup = m_screenBuffer;
+                    m_mainScreenCursorXBackup = m_cursorX;
+                    m_mainScreenCursorYBackup = m_cursorY;
+                    m_mainScreenCursorAttributesBackup = m_currentAttributes;
+
+                    Clear();
+                    m_isAlternateScreenActive = true;
+                }
+            }
+            else {
+                if (m_isAlternateScreenActive) {
+                    // Restore main screen, cursor pos, attributes
+                    if (!m_mainScreenBufferBackup.empty()) {
+                        m_screenBuffer = m_mainScreenBufferBackup;
+                        m_mainScreenBufferBackup.clear();
+                    }
+                    m_cursorX = m_mainScreenCursorXBackup;
+                    m_cursorY = m_mainScreenCursorYBackup;
+                    m_currentAttributes = m_mainScreenCursorAttributesBackup;
+
+                    m_isAlternateScreenActive = false;
+                }
+            }
+            break;
+
+        default:
+            break;
         }
     }
 }
